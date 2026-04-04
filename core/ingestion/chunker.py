@@ -66,7 +66,6 @@ class SemanticChunker:
         "resolved by",
         "try this",
     }
-
     # Patterns to skip in GitHub comments
     SKIP_PATTERNS: set[str] = {
         "me too",

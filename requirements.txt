@@ -1,0 +1,8 @@
+# Stripe Support Agent - Python Dependencies
+
+# Configuration management
+pydantic-settings>=2.0.0
+
+# Text processing
+tiktoken>=0.5.0
+beautifulsoup4>=4.12.0

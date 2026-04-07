@@ -143,6 +143,12 @@ class Settings(BaseSettings):
         default=2,
         description="Maximum retry attempts for agent operations",
     )
+    
+    # Optional API keys
+    GITHUB_TOKEN: str | None = Field(
+        default=None,
+        description="GitHub personal access token for API access (optional, increases rate limit)",
+    )
 
     # Sensitive fields that should be masked in logs
     _SENSITIVE_FIELDS: ClassVar[set[str]] = {
@@ -153,6 +159,7 @@ class Settings(BaseSettings):
         "UPSTASH_REDIS_TOKEN",
         "LANGFUSE_PUBLIC_KEY",
         "LANGFUSE_SECRET_KEY",
+        "GITHUB_TOKEN",
     }
 
     def display_config(self) -> None:

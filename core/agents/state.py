@@ -263,6 +263,9 @@ class TicketState(TypedDict, total=False):
     revision_count: int
     """Number of revision loops (to prevent infinite loops)."""
     
+    retrieval_retry_count: int
+    """Number of retrieval retry loops (synthesis -> need_more -> retrieval)."""
+    
     # ─── ESCALATION OUTPUT ───────────────────────────────────────────────────────
     # Produced when escalation is needed
     
@@ -373,6 +376,7 @@ def create_initial_state(
         quality_score=0.0,
         quality_issues=[],
         revision_count=0,
+        retrieval_retry_count=0,
         
         # Escalation defaults
         escalation_needed=False,

@@ -202,8 +202,8 @@ An enterprise-grade RAG system that drafts support responses by combining Stripe
 
 ```bash
 # Clone and enter directory
-git clone https://github.com/[username]/stripe-support-agent.git
-cd stripe-support-agent
+git clone https://github.com/KishoreReddy03/Enterprise-Knowledge-Support-Agent.git
+cd Enterprise-Knowledge-Support-Agent
 
 # Create virtual environment
 python -m venv venv
@@ -365,6 +365,5 @@ MIT
 
 ## Contact
 
-Built by [Your Name] — [your.email@example.com]
+Built by Kishore Reddy — [kishorereddy5468@gmail.com]
 
-*This project demonstrates production-grade RAG architecture for enterprise support automation. The patterns here (quality gates, confidence routing, feedback loops) apply to any domain where AI-generated content requires human oversight before customer delivery.*

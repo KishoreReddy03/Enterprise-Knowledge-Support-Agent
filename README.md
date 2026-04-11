@@ -363,7 +363,5 @@ MIT
 
 ---
 
-## Contact
 
-Built by Kishore Reddy — [kishorereddy5468@gmail.com]
 

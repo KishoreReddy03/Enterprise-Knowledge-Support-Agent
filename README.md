@@ -359,6 +359,7 @@ stripe_support_agent/
 
 ## License
 
+MIT
 
 
 

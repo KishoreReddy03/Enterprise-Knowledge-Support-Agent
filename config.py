@@ -35,9 +35,9 @@ class Settings(BaseSettings):
     )
 
     # API Keys - All required, no defaults
-    ANTHROPIC_API_KEY: str = Field(
+    OPENROUTER_API_KEY: str = Field(
         ...,
-        description="Anthropic API key for Claude models",
+        description="OpenRouter API key for LLM access",
     )
     
     # Supabase - All required
@@ -95,17 +95,21 @@ class Settings(BaseSettings):
     )
     
     # Model configuration
-    HAIKU_MODEL: str = Field(
-        default="claude-haiku-4-5-20251001",
-        description="Claude Haiku model identifier for fast operations",
+    LLM_FAST_MODEL: str = Field(
+        default="meta-llama/llama-3.1-8b-instruct:free",
+        description="Fast LLM model for lightweight operations",
     )
-    SONNET_MODEL: str = Field(
-        default="claude-sonnet-4-6",
-        description="Claude Sonnet model identifier for complex operations",
+    LLM_STRONG_MODEL: str = Field(
+        default="meta-llama/llama-3.3-70b-instruct:free",
+        description="Strong LLM model for complex operations",
     )
     EMBEDDING_MODEL: str = Field(
         default="all-MiniLM-L6-v2",
         description="Sentence transformer model for embeddings",
+    )
+    OPENROUTER_BASE_URL: str = Field(
+        default="https://openrouter.ai/api/v1",
+        description="OpenRouter API base URL",
     )
     
     # Qdrant collections
@@ -144,7 +148,7 @@ class Settings(BaseSettings):
         description="Maximum retry attempts for agent operations",
     )
     
-    # Optional API keys
+    
     GITHUB_TOKEN: str | None = Field(
         default=None,
         description="GitHub personal access token for API access (optional, increases rate limit)",
@@ -152,7 +156,7 @@ class Settings(BaseSettings):
 
     # Sensitive fields that should be masked in logs
     _SENSITIVE_FIELDS: ClassVar[set[str]] = {
-        "ANTHROPIC_API_KEY",
+        "OPENROUTER_API_KEY",
         "SUPABASE_ANON_KEY",
         "SUPABASE_SERVICE_KEY",
         "QDRANT_API_KEY",

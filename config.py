@@ -96,11 +96,11 @@ class Settings(BaseSettings):
     
     # Model configuration
     LLM_FAST_MODEL: str = Field(
-        default="meta-llama/llama-3.1-8b-instruct:free",
+        default="meta-llama/llama-3.3-70b-instruct",
         description="Fast LLM model for lightweight operations",
     )
     LLM_STRONG_MODEL: str = Field(
-        default="meta-llama/llama-3.3-70b-instruct:free",
+        default="meta-llama/llama-3.3-70b-instruct",
         description="Strong LLM model for complex operations",
     )
     EMBEDDING_MODEL: str = Field(
@@ -148,7 +148,7 @@ class Settings(BaseSettings):
         description="Maximum retry attempts for agent operations",
     )
     
-    # Optional API keys
+    
     GITHUB_TOKEN: str | None = Field(
         default=None,
         description="GitHub personal access token for API access (optional, increases rate limit)",

@@ -148,7 +148,7 @@ class Settings(BaseSettings):
         description="Maximum retry attempts for agent operations",
     )
     
-    
+    # Optional API keys
     GITHUB_TOKEN: str | None = Field(
         default=None,
         description="GitHub personal access token for API access (optional, increases rate limit)",

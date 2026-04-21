@@ -35,7 +35,7 @@ class HealthResponse(BaseModel):
     qdrant: ServiceStatus = Field(description="Qdrant vector DB status")
     supabase: ServiceStatus = Field(description="Supabase DB status")
     redis: ServiceStatus = Field(description="Redis cache status")
-    anthropic: ServiceStatus = Field(description="Anthropic API status")
+    llm: ServiceStatus = Field(description="LLM API status")
     knowledge_base_chunks: int = Field(
         description="Total chunks in knowledge base",
     )
@@ -142,32 +142,21 @@ async def check_redis() -> ServiceStatus:
         return "error"
 
 
-async def check_anthropic() -> ServiceStatus:
+async def check_llm() -> ServiceStatus:
     """
-    Check Anthropic API connectivity.
+    Check LLM API connectivity via OpenRouter.
     
     Returns:
         Service status.
     """
     try:
-        import anthropic
+        from core.llm_client import test_connection
         
-        client = anthropic.Anthropic(
-            api_key=settings.ANTHROPIC_API_KEY,
-            timeout=5.0,
-        )
-        
-        # Minimal API call to verify connectivity
-        # Using count_tokens which is cheap
-        result = client.messages.count_tokens(
-            model=settings.HAIKU_MODEL,
-            messages=[{"role": "user", "content": "test"}],
-        )
-        
-        return "connected"
+        result = await test_connection()
+        return "connected" if result else "error"
         
     except Exception as e:
-        logger.warning(f"Anthropic health check failed: {e}")
+        logger.warning(f"LLM health check failed: {e}")
         return "error"
 
 
@@ -192,7 +181,7 @@ def determine_overall_status(
     qdrant: ServiceStatus,
     supabase: ServiceStatus,
     redis: ServiceStatus,
-    anthropic: ServiceStatus,
+    llm: ServiceStatus,
 ) -> OverallStatus:
     """
     Determine overall system status from service statuses.
@@ -209,8 +198,8 @@ def determine_overall_status(
     statuses = [qdrant, supabase, redis, anthropic]
     error_count = sum(1 for s in statuses if s == "error")
     
-    # Critical services: Qdrant and Anthropic
-    critical_down = qdrant == "error" or anthropic == "error"
+    # Critical services: Qdrant and LLM
+    critical_down = qdrant == "error" or llm == "error"
     
     if error_count == 0:
         return "healthy"
@@ -244,7 +233,7 @@ async def health_check(request: Request) -> HealthResponse:
     qdrant_status, chunk_count = await check_qdrant()
     supabase_status = await check_supabase()
     redis_status = await check_redis()
-    anthropic_status = await check_anthropic()
+    llm_status = await check_llm()
     
     last_ingestion = await get_last_ingestion()
     
@@ -252,7 +241,7 @@ async def health_check(request: Request) -> HealthResponse:
         qdrant_status,
         supabase_status,
         redis_status,
-        anthropic_status,
+        llm_status,
     )
     
     logger.info(
@@ -261,7 +250,7 @@ async def health_check(request: Request) -> HealthResponse:
         f"qdrant={qdrant_status} | "
         f"supabase={supabase_status} | "
         f"redis={redis_status} | "
-        f"anthropic={anthropic_status}"
+        f"llm={llm_status}"
     )
     
     return HealthResponse(
@@ -269,7 +258,7 @@ async def health_check(request: Request) -> HealthResponse:
         qdrant=qdrant_status,
         supabase=supabase_status,
         redis=redis_status,
-        anthropic=anthropic_status,
+        llm=llm_status,
         knowledge_base_chunks=chunk_count,
         last_ingestion=last_ingestion,
         environment=settings.ENVIRONMENT,

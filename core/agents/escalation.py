@@ -11,7 +11,7 @@ Handles cases where AI cannot confidently resolve a ticket:
 import logging
 from datetime import datetime
 
-from langfuse.decorators import observe
+from langfuse import observe
 
 from core.agents.state import TicketState, get_all_results
 

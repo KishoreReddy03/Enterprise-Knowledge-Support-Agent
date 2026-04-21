@@ -2,7 +2,7 @@
 Quality gate agent for pre-send reply evaluation.
 
 This is Level 4 in the orchestration hierarchy. Evaluates AI-generated
-replies before showing them to support reps. Uses Claude Haiku for
+replies before showing them to support reps. Uses fast LLM for
 cost-effective quality assessment.
 
 THIS IS THE KEY DIFFERENTIATOR - no generic RAG project has this.
@@ -12,11 +12,10 @@ import json
 import logging
 from typing import Any
 
-import anthropic
-from langfuse.decorators import observe
+from langfuse import observe
 
-from config import settings
 from core.agents.state import CitedSource, QualityRoute, TicketState
+from core.llm_client import call_fast
 
 logger = logging.getLogger(__name__)
 
@@ -87,9 +86,8 @@ SCORING GUIDE:
 - Below 0.6: Serious problems - should escalate to senior rep"""
 
     def __init__(self) -> None:
-        """Initialize quality gate agent with Anthropic client."""
-        self._client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-        logger.info("QualityGateAgent initialized with Haiku model")
+        """Initialize quality gate agent."""
+        logger.info("QualityGateAgent initialized")
 
     def _format_sources(self, sources: list[CitedSource]) -> str:
         """
@@ -183,7 +181,7 @@ SCORING GUIDE:
         """
         Evaluate draft reply quality before showing to rep.
         
-        Uses Claude Haiku for cost-effective evaluation.
+        Uses fast LLM for cost-effective evaluation.
         
         Args:
             state: Current ticket state with draft reply.
@@ -209,17 +207,7 @@ SCORING GUIDE:
         )
         
         try:
-            response = self._client.messages.create(
-                model=settings.HAIKU_MODEL,
-                max_tokens=1024,
-                messages=[{"role": "user", "content": prompt}],
-            )
-            
-            response_text = response.content[0].text.strip()
-            
-            # Track token usage
-            tokens_used = response.usage.input_tokens + response.usage.output_tokens
-            state["total_tokens"] = state.get("total_tokens", 0) + tokens_used
+            response_text = await call_fast(prompt, max_tokens=1024)
             
             # Parse response
             parsed = self._parse_response(response_text)
@@ -253,21 +241,13 @@ SCORING GUIDE:
                     "quality_gate: JSON parse failed, defaulting to revision"
                 ]
 
-        except anthropic.APIError as e:
-            logger.error(f"Anthropic API error in quality gate: {e}")
-            # On API error, be conservative - require revision
+        except Exception as e:
+            logger.error(f"Error in quality gate: {e}")
+            # On error, be conservative - require revision
             state["quality_score"] = 0.6
             state["quality_issues"] = [f"Quality evaluation failed: {str(e)}"]
             state["error_log"] = state.get("error_log", []) + [
-                f"quality_gate: API error: {str(e)}"
-            ]
-
-        except Exception as e:
-            logger.error(f"Unexpected error in quality gate: {e}")
-            state["quality_score"] = 0.5
-            state["quality_issues"] = [f"Unexpected evaluation error: {str(e)}"]
-            state["error_log"] = state.get("error_log", []) + [
-                f"quality_gate: unexpected error: {str(e)}"
+                f"quality_gate: error: {str(e)}"
             ]
 
         # Track agent path

@@ -2,24 +2,23 @@
 Drafting agent for generating support replies.
 
 This is Level 3A in the orchestration hierarchy. Generates the actual
-customer reply using Claude Sonnet. This is the only place in the pipeline
-where Sonnet is used for generation (cost control).
+customer reply using strong LLM. This is the only place in the pipeline
+where strong model is used for generation (cost control).
 """
 
 import json
 import logging
 from typing import Any
 
-import anthropic
-from langfuse.decorators import observe
+from langfuse import observe
 
-from config import settings
 from core.agents.state import (
     CitedSource,
     ContradictionInfo,
     SourceResult,
     TicketState,
 )
+from core.llm_client import call_strong
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +27,7 @@ class DraftingAgent:
     """
     Generates support reply drafts from synthesized context.
     
-    Uses Claude Sonnet for high-quality response generation with
+    Uses strong LLM for high-quality response generation with
     proper citation and conflict handling.
     """
 
@@ -83,9 +82,8 @@ REP_GUIDANCE VALUES:
 - DO_NOT_SEND: Not enough information, escalate to senior rep"""
 
     def __init__(self) -> None:
-        """Initialize drafting agent with Anthropic client."""
-        self._client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-        logger.info("DraftingAgent initialized with Sonnet model")
+        """Initialize drafting agent."""
+        logger.info("DraftingAgent initialized")
 
     def _format_contradictions(
         self,
@@ -294,7 +292,7 @@ Note this uncertainty in the reply and recommend verifying current behavior."""
         """
         Generate a draft reply for the support ticket.
         
-        Uses Claude Sonnet to generate a well-cited, accurate response
+        Uses strong LLM to generate a well-cited, accurate response
         based on the synthesized context.
         
         Args:
@@ -307,18 +305,11 @@ Note this uncertainty in the reply and recommend verifying current behavior."""
         user_prompt = self._build_user_prompt(state)
         
         try:
-            response = self._client.messages.create(
-                model=settings.SONNET_MODEL,
+            response_text = await call_strong(
+                user_prompt,
                 max_tokens=2048,
                 system=system_prompt,
-                messages=[{"role": "user", "content": user_prompt}],
             )
-            
-            response_text = response.content[0].text.strip()
-            
-            # Track token usage
-            tokens_used = response.usage.input_tokens + response.usage.output_tokens
-            state["total_tokens"] = state.get("total_tokens", 0) + tokens_used
             
             # Parse response
             parsed = self._parse_response(response_text)
@@ -347,7 +338,7 @@ Note this uncertainty in the reply and recommend verifying current behavior."""
                 )
             else:
                 # Parse failed - generate fallback
-                logger.error("Failed to parse Sonnet response, using fallback")
+                logger.error("Failed to parse response, using fallback")
                 state["draft_reply"] = (
                     "I was unable to generate a confident response for this ticket. "
                     "Please review the retrieved sources manually."
@@ -358,16 +349,6 @@ Note this uncertainty in the reply and recommend verifying current behavior."""
                 state["error_log"] = state.get("error_log", []) + [
                     "drafting: JSON parse failed"
                 ]
-
-        except anthropic.APIError as e:
-            logger.error(f"Anthropic API error in drafting: {e}")
-            state["draft_reply"] = ""
-            state["confidence_score"] = 0.0
-            state["rep_guidance"] = "DO_NOT_SEND"
-            state["sources_cited"] = []
-            state["error_log"] = state.get("error_log", []) + [
-                f"drafting: API error: {str(e)}"
-            ]
 
         except Exception as e:
             logger.error(f"Unexpected error in drafting: {e}")

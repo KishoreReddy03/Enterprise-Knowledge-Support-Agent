@@ -9,11 +9,10 @@ import json
 import logging
 from typing import Any
 
-import anthropic
-from langfuse.decorators import observe
+from langfuse import observe
 
-from config import settings
 from core.agents.state import ContradictionInfo, SourceResult, TicketState
+from core.llm_client import call_fast, call_strong
 
 logger = logging.getLogger(__name__)
 
@@ -22,8 +21,8 @@ class SynthesisAgent:
     """
     Evaluates retrieved information and detects contradictions.
     
-    Uses Claude Haiku for sufficiency checks (cheap) and
-    Claude Sonnet for contradiction detection (high-value task).
+    Uses fast LLM for sufficiency checks (cheap) and
+    strong LLM for contradiction detection (high-value task).
     """
 
     SUFFICIENCY_PROMPT = """Evaluate whether these search results can answer the support question.
@@ -78,8 +77,7 @@ Return empty array [] if no contradictions found.
 Only flag actual contradictions, not just different aspects of the same topic."""
 
     def __init__(self) -> None:
-        """Initialize synthesis agent with Anthropic client."""
-        self._client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
+        """Initialize synthesis agent."""
         logger.info("SynthesisAgent initialized")
 
     def _format_results_for_prompt(
@@ -139,7 +137,7 @@ Only flag actual contradictions, not just different aspects of the same topic.""
         """
         Check if retrieved results are sufficient to answer the ticket.
         
-        Uses Claude Haiku for cost efficiency.
+        Uses fast LLM for cost efficiency.
         
         Args:
             ticket: The support ticket content.
@@ -156,13 +154,8 @@ Only flag actual contradictions, not just different aspects of the same topic.""
         )
 
         try:
-            response = self._client.messages.create(
-                model=settings.HAIKU_MODEL,
-                max_tokens=512,
-                messages=[{"role": "user", "content": prompt}],
-            )
+            response_text = await call_fast(prompt, max_tokens=512)
             
-            response_text = response.content[0].text.strip()
             result = self._parse_json(response_text)
             
             if result:
@@ -173,8 +166,6 @@ Only flag actual contradictions, not just different aspects of the same topic.""
                     "best_source": result.get("best_source", "none"),
                 }
             
-        except anthropic.APIError as e:
-            logger.error(f"Anthropic API error in sufficiency check: {e}")
         except Exception as e:
             logger.error(f"Error in sufficiency check: {e}")
         
@@ -193,7 +184,7 @@ Only flag actual contradictions, not just different aspects of the same topic.""
         """
         Detect contradictions between information sources.
         
-        Uses Claude Sonnet for high-quality contradiction detection.
+        Uses strong LLM for high-quality contradiction detection.
         
         Args:
             results: Dict of source type to results.
@@ -212,13 +203,8 @@ Only flag actual contradictions, not just different aspects of the same topic.""
         )
 
         try:
-            response = self._client.messages.create(
-                model=settings.SONNET_MODEL,
-                max_tokens=1024,
-                messages=[{"role": "user", "content": prompt}],
-            )
+            response_text = await call_strong(prompt, max_tokens=1024)
             
-            response_text = response.content[0].text.strip()
             result = self._parse_json(response_text)
             
             if isinstance(result, list):
@@ -234,8 +220,6 @@ Only flag actual contradictions, not just different aspects of the same topic.""
                     )
                 return contradictions
             
-        except anthropic.APIError as e:
-            logger.error(f"Anthropic API error in contradiction detection: {e}")
         except Exception as e:
             logger.error(f"Error in contradiction detection: {e}")
         

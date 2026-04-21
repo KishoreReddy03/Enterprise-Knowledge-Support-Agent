@@ -48,7 +48,7 @@ async def call_fast(
         Exception: If API call fails.
     """
     try:
-        response = await client.messages.create(
+        response = await client.chat.completions.create(
             model=settings.LLM_FAST_MODEL,
             max_tokens=max_tokens,
             temperature=temperature,
@@ -88,7 +88,7 @@ async def call_strong(
         Exception: If API call fails.
     """
     try:
-        response = await client.messages.create(
+        response = await client.chat.completions.create(
             model=settings.LLM_STRONG_MODEL,
             max_tokens=max_tokens,
             temperature=temperature,

@@ -65,11 +65,11 @@ class Settings(BaseSettings):
     )
     
     # Upstash Redis - All required
-    UPSTASH_REDIS_URL: str = Field(
+    UPSTASH_REDIS_REST_URL: str = Field(
         ...,
         description="Upstash Redis REST URL",
     )
-    UPSTASH_REDIS_TOKEN: str = Field(
+    UPSTASH_REDIS_REST_TOKEN: str = Field(
         ...,
         description="Upstash Redis REST token",
     )
@@ -96,11 +96,11 @@ class Settings(BaseSettings):
     
     # Model configuration
     LLM_FAST_MODEL: str = Field(
-        default="meta-llama/llama-3.3-70b-instruct",
+        default="google/gemma-4-26b-a4b-it:free",
         description="Fast LLM model for lightweight operations",
     )
     LLM_STRONG_MODEL: str = Field(
-        default="meta-llama/llama-3.3-70b-instruct",
+        default="google/gemma-4-31b-it:free",
         description="Strong LLM model for complex operations",
     )
     EMBEDDING_MODEL: str = Field(

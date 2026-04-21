@@ -2,15 +2,14 @@
 Intake agent for ticket classification.
 
 This is Level 0 in the orchestration hierarchy. Runs on EVERY ticket.
-Uses Claude Haiku for cost efficiency.
+Uses fast LLM for cost efficiency.
 """
 
 import json
 import logging
 from typing import Any
 
-import anthropic
-from langfuse.decorators import observe
+from langfuse import observe
 
 from config import settings
 from core.agents.state import (
@@ -19,6 +18,7 @@ from core.agents.state import (
     TicketState,
     UrgencyLevel,
 )
+from core.llm_client import call_fast
 
 logger = logging.getLogger(__name__)
 
@@ -28,7 +28,7 @@ class IntakeAgent:
     Classifies incoming support tickets for routing.
     
     Determines ticket complexity, urgency, primary topic, and extracts
-    any error codes. Uses Claude Haiku for fast, low-cost classification.
+    any error codes. Uses fast LLM for cost-efficient classification.
     """
 
     INTAKE_PROMPT = """Analyze this support ticket. Return JSON only.
@@ -75,9 +75,8 @@ Required JSON structure:
 }}"""
 
     def __init__(self) -> None:
-        """Initialize intake agent with Anthropic client."""
-        self._client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
-        logger.info("IntakeAgent initialized with Haiku model")
+        """Initialize intake agent."""
+        logger.info("IntakeAgent initialized")
 
     @observe(name="intake_agent")
     async def process(self, state: TicketState) -> TicketState:
@@ -136,7 +135,7 @@ Required JSON structure:
         is_retry: bool,
     ) -> dict[str, Any] | None:
         """
-        Call Claude Haiku and parse JSON response.
+        Call fast LLM and parse JSON response.
         
         Args:
             ticket_content: The ticket text to classify.
@@ -149,32 +148,15 @@ Required JSON structure:
         formatted_prompt = prompt.format(ticket_content=ticket_content)
         
         try:
-            response = self._client.messages.create(
-                model=settings.HAIKU_MODEL,
-                max_tokens=256,
-                messages=[
-                    {
-                        "role": "user",
-                        "content": formatted_prompt,
-                    }
-                ],
-            )
+            response_text = await call_fast(formatted_prompt, max_tokens=256)
             
-            # Extract text content
-            response_text = response.content[0].text.strip()
-            
-            # Track token usage
-            tokens_used = response.usage.input_tokens + response.usage.output_tokens
-            logger.debug(f"Haiku tokens used: {tokens_used}")
+            logger.debug(f"Fast model response received")
             
             # Parse JSON
             return self._parse_json(response_text)
             
-        except anthropic.APIError as e:
-            logger.error(f"Anthropic API error: {e}")
-            return None
         except Exception as e:
-            logger.error(f"Unexpected error calling Haiku: {e}")
+            logger.error(f"Error calling fast LLM: {e}")
             return None
 
     def _parse_json(self, text: str) -> dict[str, Any] | None:

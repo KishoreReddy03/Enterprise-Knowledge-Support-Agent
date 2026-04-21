@@ -9,7 +9,7 @@ from datetime import datetime
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Query, Request
-from langfuse.decorators import langfuse_context, observe
+from langfuse import observe
 from pydantic import BaseModel, Field
 
 from core.intelligence.pattern_detector import PatternDetector

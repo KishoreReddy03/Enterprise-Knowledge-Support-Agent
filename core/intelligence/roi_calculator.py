@@ -18,8 +18,7 @@ from datetime import datetime, timedelta
 from statistics import mean
 from typing import Any
 
-from langfuse.decorators import observe
-
+from langfuse import observe
 logger = logging.getLogger(__name__)
 
 

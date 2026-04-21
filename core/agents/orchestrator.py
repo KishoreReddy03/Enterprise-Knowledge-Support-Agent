@@ -19,7 +19,7 @@ from typing import Any
 from uuid import uuid4
 
 from langgraph.graph import END, StateGraph
-from langfuse.decorators import observe
+from langfuse import observe
 
 from config import settings
 from core.agents.state import (

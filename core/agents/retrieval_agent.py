@@ -10,7 +10,7 @@ import logging
 import time
 from typing import Any
 
-from langfuse.decorators import observe
+from langfuse import observe
 
 from config import settings
 from core.agents.state import SourceResult, TicketState

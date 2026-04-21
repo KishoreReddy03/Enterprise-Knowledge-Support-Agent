@@ -14,10 +14,9 @@ from datetime import datetime, timedelta
 from typing import Any
 from enum import Enum
 
-import anthropic
-from langfuse.decorators import observe
+from langfuse import observe
 
-from config import settings
+from core.llm_client import call_fast
 
 logger = logging.getLogger(__name__)
 
@@ -298,7 +297,6 @@ SEVERITY:
         Args:
             db: Database client. Uses default if not provided.
         """
-        self._client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         self._db = db or FeedbackDatabaseClient()
         logger.info("FeedbackProcessor initialized")
 

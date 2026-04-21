@@ -23,8 +23,6 @@ from pathlib import Path
 from statistics import mean
 from typing import Any
 
-import anthropic
-
 # Add project root to path
 sys.path.insert(0, str(Path(__file__).parent.parent))
 
@@ -38,9 +36,9 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+
 # DATA MODELS
-# ═══════════════════════════════════════════════════════════════════════════════
+
 
 @dataclass
 class CaseResult:
@@ -180,9 +178,9 @@ class EvalReport:
         return json.dumps(self.to_dict(), indent=2)
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+
 # EVALUATION FUNCTIONS
-# ═══════════════════════════════════════════════════════════════════════════════
+
 
 def percentile(values: list[float], p: int) -> float:
     """Calculate percentile of a list of values."""

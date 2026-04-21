@@ -12,7 +12,6 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
-import anthropic
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as qdrant_models
 
@@ -114,9 +113,6 @@ class IngestionOrchestrator:
             url=settings.QDRANT_URL,
             api_key=settings.QDRANT_API_KEY,
         )
-        
-        # Initialize Anthropic client for staleness detection
-        self._anthropic = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         
         logger.info("IngestionOrchestrator initialized")
 

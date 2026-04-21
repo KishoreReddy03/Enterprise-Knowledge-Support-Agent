@@ -11,7 +11,7 @@ from typing import Literal
 from uuid import uuid4
 
 from fastapi import APIRouter, Request
-from langfuse.decorators import langfuse_context, observe
+from langfuse import observe
 from pydantic import BaseModel, Field
 
 from config import settings

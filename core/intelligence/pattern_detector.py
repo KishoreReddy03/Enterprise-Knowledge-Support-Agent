@@ -16,10 +16,9 @@ from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Any
 
-import anthropic
-from langfuse.decorators import observe
+from langfuse import observe
 
-from config import settings
+from core.llm_client import call_fast
 
 logger = logging.getLogger(__name__)
 
@@ -364,7 +363,6 @@ Return ONLY valid JSON (no markdown, no explanation):
         Args:
             db: Database client for fetching data. Uses default if not provided.
         """
-        self._client = anthropic.Anthropic(api_key=settings.ANTHROPIC_API_KEY)
         self._db = db or DatabaseClient()
         logger.info("PatternDetector initialized")
 

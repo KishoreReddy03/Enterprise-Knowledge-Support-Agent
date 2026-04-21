@@ -8,7 +8,7 @@ import logging
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request
-from langfuse.decorators import langfuse_context, observe
+from langfuse import observe
 from pydantic import BaseModel, Field, field_validator
 
 from core.intelligence.feedback_loop import FeedbackProcessor

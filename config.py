@@ -126,7 +126,7 @@ class Settings(BaseSettings):
         description="Qdrant collection name for StackOverflow posts",
     )
     
-    # Thresholds
+
     CONFIDENCE_HIGH_THRESHOLD: float = Field(
         default=0.90,
         description="Threshold for high confidence responses (auto-send eligible)",

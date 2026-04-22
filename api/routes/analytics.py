@@ -133,10 +133,10 @@ async def get_roi_report(request: Request) -> ROIReportResponse:
     logger.info(f"Fetching ROI report | request_id={request_id}")
     
     try:
-        langfuse_context.update_current_trace(
-            name="roi_report_fetch",
-            metadata={"request_id": request_id},
-        )
+        # langfuse_context.update_current_trace(
+        #     name="roi_report_fetch",
+        #     metadata={"request_id": request_id},
+        # )
         
         calculator = ROICalculator()
         report = await calculator.calculate_weekly_metrics()
@@ -221,13 +221,13 @@ async def get_pattern_report(
     )
     
     try:
-        langfuse_context.update_current_trace(
-            name="pattern_report_fetch",
-            metadata={
-                "request_id": request_id,
-                "force_refresh": force_refresh,
-            },
-        )
+        # langfuse_context.update_current_trace(
+        #     name="pattern_report_fetch",
+        #     metadata={
+        #         "request_id": request_id,
+        #         "force_refresh": force_refresh,
+        #     },
+        # )
         
         detector = PatternDetector()
         

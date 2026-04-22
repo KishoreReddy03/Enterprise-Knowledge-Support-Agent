@@ -134,15 +134,15 @@ async def process_ticket_endpoint(
     
     try:
         # Update Langfuse context
-        langfuse_context.update_current_trace(
-            name="ticket_processing",
-            user_id=body.customer_id or "anonymous",
-            metadata={
-                "ticket_id": ticket_id,
-                "customer_tier": body.customer_tier,
-                "request_id": request_id,
-            },
-        )
+        # langfuse_context.update_current_trace(
+        #     name="ticket_processing",
+        #     user_id=body.customer_id or "anonymous",
+        #     metadata={
+        #         "ticket_id": ticket_id,
+        #         "customer_tier": body.customer_tier,
+        #         "request_id": request_id,
+        #     },
+        # )
         
         # Process through orchestrator
         result = await process_ticket(

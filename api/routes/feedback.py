@@ -112,16 +112,16 @@ async def submit_feedback(
     
     try:
         # Update Langfuse context
-        langfuse_context.update_current_trace(
-            name="feedback_submission",
-            metadata={
-                "feedback_id": feedback_id,
-                "response_id": body.response_id,
-                "was_sent": body.was_sent,
-                "has_rating": body.rep_rating is not None,
-                "request_id": request_id,
-            },
-        )
+        # langfuse_context.update_current_trace(
+        #     name="feedback_submission",
+        #     metadata={
+        #         "feedback_id": feedback_id,
+        #         "response_id": body.response_id,
+        #         "was_sent": body.was_sent,
+        #         "has_rating": body.rep_rating is not None,
+        #         "request_id": request_id,
+        #     },
+        # )
         
         # Process feedback
         processor = FeedbackProcessor()

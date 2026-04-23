@@ -110,9 +110,11 @@ class DocumentEmbedder:
         # Initialize Qdrant client
         try:
             self._qdrant = QdrantClient(
-                url=settings.QDRANT_URL,
-                api_key=settings.QDRANT_API_KEY,
-            )
+                                url=settings.QDRANT_URL,
+                                api_key=settings.QDRANT_API_KEY,
+                                timeout=60,
+                                check_compatibility=False,
+                                        )
             logger.info(f"Connected to Qdrant at {settings.QDRANT_URL}")
         except Exception as e:
             logger.error(f"Failed to connect to Qdrant: {e}")
@@ -236,52 +238,12 @@ class DocumentEmbedder:
         return embeddings
 
     def ensure_collection(self, collection_name: str) -> None:
-        """
-        Create Qdrant collection if it doesn't exist.
-        
-        Creates collection with cosine distance and payload indexes
-        for efficient filtering. Idempotent - safe to call multiple times.
-        
-        Args:
-            collection_name: Name of the collection to create.
-        """
-        try:
-            # Check if collection exists
-            collections = self._qdrant.get_collections().collections
-            exists = any(c.name == collection_name for c in collections)
-
-            if exists:
-                logger.info(f"Collection '{collection_name}' already exists")
+                """
+                Temporarily skip collection existence check because collection
+                is already created manually in Qdrant dashboard.
+                """
+                logger.info(f"Skipping ensure_collection for '{collection_name}' (already created manually)")
                 return
-
-            # Create collection
-            self._qdrant.create_collection(
-                collection_name=collection_name,
-                vectors_config=qdrant_models.VectorParams(
-                    size=self.VECTOR_SIZE,
-                    distance=qdrant_models.Distance.COSINE,
-                ),
-            )
-            logger.info(f"Created collection '{collection_name}'")
-
-            # Create payload indexes for efficient filtering
-            index_fields = ["source_type", "source_url", "date", "chunk_id"]
-
-            for field in index_fields:
-                try:
-                    self._qdrant.create_payload_index(
-                        collection_name=collection_name,
-                        field_name=field,
-                        field_schema=qdrant_models.PayloadSchemaType.KEYWORD,
-                    )
-                    logger.info(f"Created index on '{field}' in '{collection_name}'")
-                except UnexpectedResponse as e:
-                    # Index might already exist
-                    logger.debug(f"Index on '{field}' may already exist: {e}")
-
-        except Exception as e:
-            logger.error(f"Failed to ensure collection '{collection_name}': {e}")
-            raise
 
     def _chunk_to_payload(self, chunk: Chunk) -> dict[str, Any]:
         """
@@ -379,7 +341,7 @@ class DocumentEmbedder:
         failed = 0
 
         # Process in batches for upsert
-        upsert_batch_size = 100
+        upsert_batch_size = 5
 
         with tqdm(
             total=len(chunks),

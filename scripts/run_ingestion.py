@@ -1,14 +1,25 @@
 import asyncio
-from core.ingestion.scrapers import scraper
+from core.ingestion.scheduler import orchestrator
 
 async def main():
-    docs = await scraper.scrape_stripe_docs(sections=["payments", "webhooks"])
-    print(f"Stripe docs fetched: {len(docs)}")
+    report = await orchestrator.run_full_ingestion(
+        sources=["docs"]
+    )
 
-    issues = await scraper.fetch_github_issues(max_per_repo=20)
-    print(f"GitHub issues fetched: {len(issues)}")
+    print("\n=== INGESTION REPORT ===")
+    print(f"Success: {report.success}")
+    print(f"Total documents: {report.total_documents}")
+    print(f"Total chunks: {report.total_chunks}")
 
-    so = await scraper.fetch_stackoverflow_questions(max_questions=20)
-    print(f"StackOverflow questions fetched: {len(so)}")
+    for source in report.sources:
+        print(f"\nSource: {source.source}")
+        print(f"  Success: {source.success}")
+        print(f"  Documents: {source.documents_scraped}")
+        print(f"  Chunks: {source.chunks_created}")
+        print(f"  Inserted: {source.chunks_inserted}")
+        print(f"  Updated: {source.chunks_updated}")
+        print(f"  Failed: {source.chunks_failed}")
+        if source.error:
+            print(f"  Error: {source.error}")
 
 asyncio.run(main())

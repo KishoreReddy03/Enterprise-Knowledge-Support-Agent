@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-
+"""Test Supabase connection (direct or pooler)."""
 
 import psycopg2
 from config import settings

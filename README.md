@@ -24,7 +24,7 @@ An enterprise-grade RAG system that drafts support responses by combining Stripe
 
 ---
 
-## What Makes This Different
+
 
 1. **Quality gate before human review, not after.** Most RAG systems show the LLM output directly to users. I added a dedicated Haiku-based evaluation agent that checks every response against 4 criteria (answers the question, claims have sources, no hallucinated API behavior, appropriate for customer tier) before it reaches the support rep. Responses scoring below 0.8 loop back for revision. This catches ~[METRIC]% of problematic responses before they waste rep time.
 

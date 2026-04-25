@@ -6,6 +6,7 @@ An enterprise-grade RAG system that drafts support responses by combining Stripe
 
 ---
 
+## Measured Results
 
 | Metric | Result |
 |--------|--------|

@@ -1,6 +1,4 @@
-# Stripe Support Knowledge Agent
 
-## Internal AI assistant for support reps
 
 An enterprise-grade RAG system that drafts support responses by combining Stripe documentation, GitHub issues, and StackOverflow answers. Built with a 6-agent pipeline that catches hallucinations before they reach customers, reducing resolution time by [METRIC]% while maintaining [METRIC]% faithfulness to source material.
 

@@ -23,8 +23,7 @@ class Settings(BaseSettings):
     """
     Application settings loaded from environment variables.
     
-    Required variables will raise a validation error with a clear message if missing.
-    Optional variables have sensible defaults for development.
+  
     """
 
     model_config = SettingsConfigDict(

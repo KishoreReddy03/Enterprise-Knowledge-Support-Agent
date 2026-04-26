@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 
 class Settings(BaseSettings):
     """
-    Application settings loaded from environment variables.
+    
     
     Required variables will raise a validation error with a clear message if missing.
     Optional variables have sensible defaults for development.
@@ -53,15 +53,9 @@ class Settings(BaseSettings):
         ...,
         description="Supabase service role key for admin operations",
     )
-    
-    # Qdrant - All required
-    QDRANT_URL: str = Field(
+    SUPABASE_DB_URL: str = Field(
         ...,
-        description="Qdrant vector database URL",
-    )
-    QDRANT_API_KEY: str = Field(
-        ...,
-        description="Qdrant API key",
+        description="Postgres connection pooler URL (Settings > Database > Connection pooling > Transaction mode). Format: postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres. For direct connection: postgresql://postgres:PASSWORD@db.PROJECT_REF.supabase.co:5432/postgres",
     )
     
     # Upstash Redis - All required
@@ -105,25 +99,11 @@ class Settings(BaseSettings):
     )
     EMBEDDING_MODEL: str = Field(
         default="all-MiniLM-L6-v2",
-        description="Sentence transformer model for embeddings",
+        description="Sentence transformer model for embeddings (384 dimensions)",
     )
     OPENROUTER_BASE_URL: str = Field(
         default="https://openrouter.ai/api/v1",
         description="OpenRouter API base URL",
-    )
-    
-    # Qdrant collections
-    QDRANT_DOCS_COLLECTION: str = Field(
-        default="stripe_docs",
-        description="Qdrant collection name for Stripe documentation",
-    )
-    QDRANT_ISSUES_COLLECTION: str = Field(
-        default="stripe_github_issues",
-        description="Qdrant collection name for GitHub issues",
-    )
-    QDRANT_STACKOVERFLOW_COLLECTION: str = Field(
-        default="stripe_stackoverflow",
-        description="Qdrant collection name for StackOverflow posts",
     )
     
     # Thresholds
@@ -140,8 +120,8 @@ class Settings(BaseSettings):
         description="Threshold for low confidence responses (escalation likely)",
     )
     RETRIEVAL_SIMILARITY_THRESHOLD: float = Field(
-        default=0.75,
-        description="Minimum similarity score for retrieved documents",
+        default=0.2,
+        description="Minimum similarity score for retrieved documents (TEMPORARILY LOWERED FOR DEBUG)",
     )
     MAX_AGENT_RETRIES: int = Field(
         default=2,
@@ -159,8 +139,8 @@ class Settings(BaseSettings):
         "OPENROUTER_API_KEY",
         "SUPABASE_ANON_KEY",
         "SUPABASE_SERVICE_KEY",
-        "QDRANT_API_KEY",
-        "UPSTASH_REDIS_TOKEN",
+        "SUPABASE_DB_URL",
+        "UPSTASH_REDIS_REST_TOKEN",
         "LANGFUSE_PUBLIC_KEY",
         "LANGFUSE_SECRET_KEY",
         "GITHUB_TOKEN",

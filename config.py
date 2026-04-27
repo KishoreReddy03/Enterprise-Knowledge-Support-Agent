@@ -1,4 +1,9 @@
+"""
+Configuration module for Stripe Support Agent.
 
+Uses pydantic-settings to load and validate environment variables from .env file.
+All required variables will fail with clear error messages if missing.
+"""
 
 import logging
 import sys

@@ -134,17 +134,6 @@ class Settings(BaseSettings):
         description="GitHub personal access token for API access (optional, increases rate limit)",
     )
 
-    # Sensitive fields that should be masked in logs
-    _SENSITIVE_FIELDS: ClassVar[set[str]] = {
-        "OPENROUTER_API_KEY",
-        "SUPABASE_ANON_KEY",
-        "SUPABASE_SERVICE_KEY",
-        "SUPABASE_DB_URL",
-        "UPSTASH_REDIS_REST_TOKEN",
-        "LANGFUSE_PUBLIC_KEY",
-        "LANGFUSE_SECRET_KEY",
-        "GITHUB_TOKEN",
-    }
 
     def display_config(self) -> None:
         """

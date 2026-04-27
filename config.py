@@ -89,7 +89,19 @@ class Settings(BaseSettings):
     )
     
     # Model configuration
-ENROUTER_BASE_URL: str = Field(
+    LLM_FAST_MODEL: str = Field(
+        default="google/gemma-4-26b-a4b-it:free",
+        description="Fast LLM model for lightweight operations",
+    )
+    LLM_STRONG_MODEL: str = Field(
+        default="google/gemma-4-31b-it:free",
+        description="Strong LLM model for complex operations",
+    )
+    EMBEDDING_MODEL: str = Field(
+        default="all-MiniLM-L6-v2",
+        description="Sentence transformer model for embeddings (384 dimensions)",
+    )
+    OPENROUTER_BASE_URL: str = Field(
         default="https://openrouter.ai/api/v1",
         description="OpenRouter API base URL",
     )

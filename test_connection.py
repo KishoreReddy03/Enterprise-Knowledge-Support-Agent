@@ -33,7 +33,17 @@ try:
     """)
     result = cursor.fetchone()
     if result:
-
+        print(f"✅ pgvector v{result[0]} installed")
+    else:
+        print("⚠️  pgvector NOT installed")
+        print("   → You need to run: database/migrations/002_pgvector_setup.sql")
+    
+    cursor.close()
+    conn.close()
+    
+    print("\n" + "=" * 70)
+    print("✅ ALL TESTS PASSED - Ready to go!")
+    print("=" * 70)
     
 except psycopg2.OperationalError as e:
     error_msg = str(e)

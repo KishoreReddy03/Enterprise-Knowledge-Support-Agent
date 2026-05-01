@@ -1,15 +1,7 @@
 import httpx
 from config import settings
 
-payload = {
-    "points": [
-        {
-            "id": 1,
-            "vector": [0.1] * 384,
-            "payload": {"test": "ok"},
-        }
-    ]
-}
+
 
 r = httpx.put(
     f"{settings.QDRANT_URL}/collections/stripe_docs/points",

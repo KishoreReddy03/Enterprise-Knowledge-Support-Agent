@@ -52,7 +52,21 @@ class Settings(BaseSettings):
     SUPABASE_SERVICE_KEY: str = Field(
         ...,
         description="Supabase service role key for admin operations",
-
+    )
+    SUPABASE_DB_URL: str = Field(
+        ...,
+        description="Postgres connection pooler URL (Settings > Database > Connection pooling > Transaction mode). Format: postgresql://postgres.PROJECT_REF:PASSWORD@aws-0-REGION.pooler.supabase.com:6543/postgres. For direct connection: postgresql://postgres:PASSWORD@db.PROJECT_REF.supabase.co:5432/postgres",
+    )
+    
+    # Upstash Redis - All required
+    UPSTASH_REDIS_REST_URL: str = Field(
+        ...,
+        description="Upstash Redis REST URL",
+    )
+    UPSTASH_REDIS_REST_TOKEN: str = Field(
+        ...,
+        description="Upstash Redis REST token",
+    )
     
     # Langfuse - Required keys with optional host
     LANGFUSE_PUBLIC_KEY: str = Field(

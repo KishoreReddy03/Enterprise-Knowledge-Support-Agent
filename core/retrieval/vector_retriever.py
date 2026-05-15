@@ -8,6 +8,7 @@ logger = logging.getLogger(__name__)
 class VectorRetriever:
     """
     Handles vector storage and similarity search in Neon Postgres.
+    Aligned with the explicit schema (url, title, content, embedding, is_stale).
     """
     
     COLLECTION_TO_TABLE = {
@@ -23,24 +24,6 @@ class VectorRetriever:
     def _get_connection(self):
         return psycopg2.connect(self.db_url)
 
-    def collection_exists(self, collection_name: str) -> bool:
-        table_name = self.COLLECTION_TO_TABLE.get(collection_name)
-        if not table_name:
-            return False
-            
-        conn = self._get_connection()
-        try:
-            with conn.cursor() as cur:
-                cur.execute("""
-                    SELECT EXISTS (
-                        SELECT FROM information_schema.tables 
-                        WHERE table_name = %s
-                    );
-                """, (table_name,))
-                return cur.fetchone()[0]
-        finally:
-            conn.close()
-
     def upsert(self, collection_name: str, points: list[dict]) -> bool:
         table_name = self.COLLECTION_TO_TABLE.get(collection_name)
         if not table_name:
@@ -50,23 +33,29 @@ class VectorRetriever:
         conn = self._get_connection()
         try:
             with conn.cursor() as cur:
-                # Prepare data for batch insert
+                # Prepare data for batch insert using explicit columns
                 data = []
                 for p in points:
+                    payload = p["payload"]
                     data.append((
                         p["id"],
+                        payload.get("url", ""),
+                        payload.get("title", ""),
+                        payload.get("content", ""),
                         p["vector"],
-                        psycopg2.extras.Json(p["payload"]),
-                        False # is_stale
+                        payload.get("is_stale", False)
                     ))
                 
                 execute_values(cur, f"""
-                    INSERT INTO {table_name} (id, embedding, metadata, is_stale)
+                    INSERT INTO {table_name} (id, url, title, content, embedding, is_stale)
                     VALUES %s
                     ON CONFLICT (id) DO UPDATE SET
+                        url = EXCLUDED.url,
+                        title = EXCLUDED.title,
+                        content = EXCLUDED.content,
                         embedding = EXCLUDED.embedding,
-                        metadata = EXCLUDED.metadata,
-                        is_stale = EXCLUDED.is_stale
+                        is_stale = EXCLUDED.is_stale,
+                        updated_at = NOW()
                 """, data)
                 conn.commit()
                 return True
@@ -85,9 +74,8 @@ class VectorRetriever:
         conn = self._get_connection()
         try:
             with conn.cursor() as cur:
-                # pgvector cosine similarity search (<=> is distance, so 1 - distance is similarity)
                 cur.execute(f"""
-                    SELECT id, metadata, 1 - (embedding <=> %s::vector) as score
+                    SELECT id, url, title, content, 1 - (embedding <=> %s::vector) as score
                     FROM {table_name}
                     WHERE 1 - (embedding <=> %s::vector) >= %s
                     AND is_stale = FALSE
@@ -99,8 +87,12 @@ class VectorRetriever:
                 for row in cur.fetchall():
                     results.append({
                         "id": row[0],
-                        "payload": row[1],
-                        "score": row[2]
+                        "payload": {
+                            "url": row[1],
+                            "title": row[2],
+                            "content": row[3]
+                        },
+                        "score": row[4]
                     })
                 return results
         finally:

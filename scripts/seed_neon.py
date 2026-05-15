@@ -6,7 +6,7 @@ import logging
 # Add project root to path so we can import core/config
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from core.ingestion.chunker import Chunker
+from core.ingestion.chunker import SemanticChunker
 from core.ingestion.embedder import DocumentEmbedder
 
 logging.basicConfig(level=logging.INFO)
@@ -35,13 +35,13 @@ SAMPLE_DOCS = [
 ]
 
 async def seed():
-    chunker = Chunker()
-    embedder = DocumentEmbedder()
+    chunker_obj = SemanticChunker()
+    embedder_obj = DocumentEmbedder()
     
     for doc in SAMPLE_DOCS:
         logger.info(f"Ingesting: {doc['title']}")
-        chunks = chunker.chunk_document(doc)
-        result = embedder.upsert_chunks(chunks, doc["source_type"])
+        chunks = chunker_obj.chunk_document(doc)
+        result = embedder_obj.upsert_chunks(chunks, doc["source_type"])
         logger.info(f"Result: {result}")
 
 if __name__ == "__main__":

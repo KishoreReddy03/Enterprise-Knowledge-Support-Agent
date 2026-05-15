@@ -16,7 +16,7 @@ class Chunk:
     date: str = ""
     metadata: dict[str, Any] = None
 
-class Chunker:
+class SemanticChunker:
     """
     Intelligent document chunking for Stripe-related content.
     """
@@ -37,8 +37,6 @@ class Chunker:
         if not text:
             return []
             
-        # Very basic sliding window chunking for demonstration
-        # In production, use LangChain's RecursiveCharacterTextSplitter
         chunks = []
         start = 0
         while start < len(text):
@@ -61,3 +59,6 @@ class Chunker:
             start += self.chunk_size - self.chunk_overlap
             
         return chunks
+
+# Module-level singleton
+chunker = SemanticChunker()

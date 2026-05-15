@@ -52,3 +52,6 @@ class DocumentEmbedder:
             return {"inserted": len(chunks), "failed": 0}
         else:
             return {"inserted": 0, "failed": len(chunks)}
+
+# Module-level singleton
+embedder = DocumentEmbedder()

@@ -43,16 +43,40 @@ Official documentation explains *intended* behavior, but real production failure
 
 ---
 
-## 🛠️ Technical Implementation
+## 🛠️ High-Precision 3-Phase Retrieval Engine
 
-### ✂️ Semantic Chunking
-Embedding quality cannot compensate for broken chunk semantics. We use **Chunker.py** to handle:
-- **Markdown Header Splitting**: Respecting logical structure.
-- **Recursive Character Splitting**: Preserving context thread.
+To guarantee absolute relevance and data trust, this repository implements a state-of-the-art, multi-stage hybrid search pipeline:
 
-### ⚡ Infrastructure & Retrieval
-- **DocumentEmbedder**: Handles batch vectorization to maximize throughput.
-- **VectorRetriever**: Manages the `pgvector` interface with Neon. While simple audit scripts can count records using raw SQL, the **AI Agents** rely on this retriever to perform high-speed semantic similarity searches.
+```text
+User Query ──> [1. Query Classifier] ──> Parallel Search (pgvector + FTS)
+                                                     │
+                                                     ▼
+               [3. Cross-Encoder] <── [2. Trust Boost & Age Decay]
+                       │
+                       ▼
+             Top-k Precision Chunks
+```
+
+### 🧠 Phase 1: Query Classification & Hybrid Search
+*   **Adaptive Intent Classification**: Classifies queries into categories (such as `API`, `Problem`, or `Conceptual`) on-the-fly to calibrate optimal search weights.
+*   **Parallel Hybrid Matcher**: Concurrently executes semantic vector search (via `pgvector`) and keyword-focused Full-Text Search (FTS) with advanced English stopword filtering.
+*   **Reciprocal Rank Fusion (RRF)**: Merges the candidates dynamically, prioritizing keyword matching for syntactical query intents and semantic vector similarity for conceptual intents.
+
+### ⚖️ Phase 2: Metadata-Aware Ranking (Trust & Freshness)
+*   **Source Trust Boosts**: Hard-codes corporate authority tiers by applying score boosts to official Stripe Docs and minor penalties to unverified community forum posts (StackOverflow).
+*   **Soft Freshness (Temporal Decay)**: Applies a gentle temporal penalty based on a document's age in days. Highly relevant older core documents remain retrievable, while newer matching pages win close tie-breakers.
+*   **Hard Freshness Filters**: Strictly blocks officially deprecated or archived articles (`is_stale = TRUE`) at the SQL layer.
+
+### 🎯 Phase 3: Cross-Encoder Reranking
+*   **Joint Attention Ranking**: Fused candidates are evaluated by a deep local Cross-Encoder model (`ms-marco-MiniLM-L-6-v2`). It scores query-document pairs by evaluating full semantic relationships, delivering near-human accuracy in final ranking.
+
+---
+
+## ✂️ Semantic Chunking
+Embedding quality cannot compensate for broken chunk semantics. We use `chunker.py` to handle:
+- **Markdown Header Splitting**: Respecting logical document hierarchy.
+- **Recursive Character Splitting**: Preserving the contextual thread within boundaries.
+
 
 ---
 

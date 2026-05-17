@@ -1,0 +1,21 @@
+"""Retrieval module for semantic and keyword search."""
+
+from core.retrieval.vector_retriever import (
+    RetrievalResult,
+    RetrieverError,
+    RetrieverTimeoutError,
+    RetrieverUnavailableError,
+    VectorRetriever,
+)
+from core.retrieval.hybrid import (
+    HybridRetriever,
+)
+
+__all__ = [
+    "RetrievalResult",
+    "RetrieverError",
+    "RetrieverTimeoutError",
+    "RetrieverUnavailableError",
+    "VectorRetriever",
+    "HybridRetriever",
+]

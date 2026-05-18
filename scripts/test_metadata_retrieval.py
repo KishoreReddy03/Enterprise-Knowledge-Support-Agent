@@ -71,7 +71,7 @@ async def test_metadata_aware_retrieval():
     query_vector = embedder.embed_batch(["Stripe Payments official documentation covers how to secure your charges"])[0]
 
     # --- SCENARIO 1: Source Trust Boost ---
-    print("\n⚖️ SCENARIO 1: Source Trust Prioritization")
+    print("\n SCENARIO 1: Source Trust Prioritization")
     print("--------------------------------------------------")
     print("Searching 'stripe_docs' and 'stripe_stackoverflow' with trust boost enabled...")
     
@@ -83,7 +83,7 @@ async def test_metadata_aware_retrieval():
     print("   -> Success: Official docs prioritized via metadata-driven trust tiers!")
 
     # --- SCENARIO 2: Freshness (Stale-Filtering) ---
-    print("\n🍃 SCENARIO 2: Freshness & Stale Chunk Filtering")
+    print("\n SCENARIO 2: Freshness & Stale Chunk Filtering")
     print("--------------------------------------------------")
     print("Searching with is_stale=False (strict freshness)...")
     
@@ -94,7 +94,7 @@ async def test_metadata_aware_retrieval():
     print(f"Stale chunk retrieved? {'⚠️ Yes (Fail)' if stale_found else '✅ No (Success - Filtered!)'}")
 
     # --- SCENARIO 3: Date Filtering ---
-    print("\n📅 SCENARIO 3: Temporal / Date-Range Filtering")
+    print("\n SCENARIO 3: Temporal / Date-Range Filtering")
     print("--------------------------------------------------")
     recent_date = (datetime.now() - timedelta(days=10)).strftime('%Y-%m-%d')
     print(f"Searching for chunks updated on or after {recent_date}...")
@@ -106,7 +106,7 @@ async def test_metadata_aware_retrieval():
     print(f"Old SO chunk retrieved? {'⚠️ Yes (Fail)' if so_found else '✅ No (Success - Filtered out because it was updated 100 days ago!)'}")
 
     # --- SCENARIO 4: Soft Freshness (Temporal Decay) ---
-    print("\n⏳ SCENARIO 4: Soft Freshness & Temporal Decay")
+    print("\n SCENARIO 4: Soft Freshness & Temporal Decay")
     print("--------------------------------------------------")
     print("Searching StackOverflow with enable_decay=True (No hard date cutoff)...")
     

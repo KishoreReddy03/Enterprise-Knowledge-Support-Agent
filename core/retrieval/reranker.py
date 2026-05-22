@@ -89,6 +89,7 @@ class CrossEncoderReranker:
             # Attach scores and sort by descending score
             scored_results = []
             for result, score in zip(results, scores):
+                result.score = float(score)
                 scored_results.append((result, float(score)))
             
             scored_results.sort(key=lambda x: x[1], reverse=True)

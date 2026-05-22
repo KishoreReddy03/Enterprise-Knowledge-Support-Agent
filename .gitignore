@@ -49,3 +49,7 @@ evaluation/results/
 # OS
 .DS_Store
 Thumbs.db
+
+# Large local docs and database dumps
+stripe_docs/
+stripe_docs

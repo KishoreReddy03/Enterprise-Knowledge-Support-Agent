@@ -1,0 +1,146 @@
+[
+  {
+    "id": "fs_001",
+    "ticket_content": "We're getting 'No such PaymentIntent' errors when trying to confirm a payment. The PaymentIntent ID looks correct. This is blocking checkout for our customers.",
+    "classification": {
+      "complexity": "simple",
+      "urgency": "high",
+      "primary_topic": "api"
+    },
+    "ideal_response": "Thanks for reaching out — I know checkout issues are urgent, so let me help you get unblocked quickly.\n\nThe 'No such PaymentIntent' error almost always means the API key used to confirm the payment doesn't match the one that created it. The most common scenario is mixing up test mode and live mode keys, or (if you're using Connect) trying to access a PaymentIntent from the platform account when it was created on a connected account.\n\nHere's what I'd check:\n1. Confirm both your create and confirm calls use the same API key (both live or both test)\n2. If using Connect, make sure you're passing the `Stripe-Account` header\n3. Check the PaymentIntent status in your Dashboard — it may have already been confirmed or canceled\n\nA quick debugging tip: the error response body includes a `request_log_url` — clicking that will take you straight to the failed request in your Dashboard with all the details.\n\nLet me know if that helps or if you're still stuck!\n\n---\nRep Note: If the customer is using Connect, verify they understand the difference between platform vs connected account API keys. This is a very common Connect onboarding issue.",
+    "sources_used": ["docs", "stackoverflow"],
+    "tags": ["PaymentIntent", "error", "api_key", "confirm"]
+  },
+  {
+    "id": "fs_002",
+    "ticket_content": "Our webhook endpoint keeps receiving the same event over and over. We return a 200 response but Stripe keeps retrying. What's going on?",
+    "classification": {
+      "complexity": "moderate",
+      "urgency": "medium",
+      "primary_topic": "webhook"
+    },
+    "ideal_response": "Great question — this is one of the trickiest webhook issues and I see it fairly often!\n\nStripe retries webhook events when it doesn't receive a 2xx response within 20 seconds. Even if your server processes the event correctly, Stripe might not be seeing your 200. The two most common culprits:\n\n1. **Your handler is too slow** — if it takes longer than 20 seconds (e.g., heavy database writes), Stripe treats it as a failure. The fix is to return 200 immediately, then process the event in a background job.\n\n2. **A proxy is intercepting** — Nginx, Cloudflare, or a load balancer might be returning a different status code before your app even responds. Check your proxy access logs.\n\nFor deduplication, always store the `event.id` and skip events you've already processed — Stripe guarantees each event ID is unique.\n\nYou can verify exactly what's happening by going to Dashboard → Developers → Webhooks → your endpoint → \"Attempts\" tab. It shows the exact response code and body Stripe received from your server.\n\nHope that clears things up!\n\n---\nRep Note: If the customer is using a serverless platform (Lambda, Vercel), cold starts can cause timeouts. Ask about their infrastructure.",
+    "sources_used": ["docs", "stackoverflow"],
+    "tags": ["webhook", "retry", "timeout", "idempotency"]
+  },
+  {
+    "id": "fs_003",
+    "ticket_content": "Customer charged twice duplicate payment confirmation refund issue",
+    "classification": {
+      "complexity": "moderate",
+      "urgency": "high",
+      "primary_topic": "billing"
+    },
+    "ideal_response": "I'm sorry to hear about the duplicate charge — let's get this sorted out right away.\n\nFor the immediate fix: head to your Dashboard → Payments, find the duplicate charge, and hit the Refund button. The refund typically shows on the customer's statement within 5-10 business days.\n\nAs for why it happened — duplicate charges almost always occur when the payment confirmation is retried on the client side (user double-clicks the pay button, or a network timeout triggers a retry). To prevent this going forward, I'd recommend two things:\n\nFirst, use an **idempotency key** when creating PaymentIntents:\n```python\nstripe.PaymentIntent.create(\n    amount=1000,\n    currency='usd',\n    idempotency_key='order_12345'\n)\n```\nThis ensures Stripe rejects duplicate requests with the same key.\n\nSecond, disable the pay button on your frontend after the first click — that catches most accidental double-submissions.\n\nLet me know once the refund is processed!\n\n---\nRep Note: Check if the customer has multiple duplicate charges or just one. If it's a recurring pattern, their frontend integration likely has a retry bug.",
+    "sources_used": ["docs", "changelog"],
+    "tags": ["duplicate", "charge", "refund", "idempotency"]
+  },
+  {
+    "id": "fs_004",
+    "ticket_content": "How do I set up Stripe Connect for our marketplace? We need to onboard sellers and split payments between the platform and sellers.",
+    "classification": {
+      "complexity": "complex",
+      "urgency": "low",
+      "primary_topic": "connect"
+    },
+    "ideal_response": "For a marketplace with payment splitting, you'll want **Stripe Connect with destination charges**. Here's the architecture:\n\n**Step 1: Onboard Sellers**\n- Use Connect Onboarding (hosted) to create connected accounts:\n  ```python\n  account = stripe.Account.create(type='express')\n  account_link = stripe.AccountLink.create(\n      account=account.id,\n      refresh_url='https://yoursite.com/reauth',\n      return_url='https://yoursite.com/success',\n      type='account_onboarding'\n  )\n  ```\n- This handles all KYC/identity verification automatically.\n\n**Step 2: Create Payments with Splits**\n- When a buyer purchases, create a PaymentIntent with a `transfer_data` block:\n  ```python\n  stripe.PaymentIntent.create(\n      amount=10000,  # $100.00\n      currency='usd',\n      application_fee_amount=1500,  # Your 15% platform fee\n      transfer_data={'destination': seller_account_id}\n  )\n  ```\n\n**Step 3: Payouts**\n- Stripe automatically pays out to sellers on a rolling basis (default: 2-day rolling for US).\n\n**Rep note**: This is a complex integration. Consider sharing our Connect integration checklist and offering a follow-up call if the customer is on an Enterprise plan.\n\n[Source: Stripe Docs — Connect Overview]\n[Source: Stripe Docs — Destination Charges]",
+    "sources_used": ["docs"],
+    "tags": ["connect", "marketplace", "onboarding", "transfer", "split"]
+  },
+  {
+    "id": "fs_005",
+    "ticket_content": "We need to verify webhook signatures in our Node.js app but keep getting 'Webhook signature verification failed'. We're using the endpoint secret from the dashboard.",
+    "classification": {
+      "complexity": "simple",
+      "urgency": "medium",
+      "primary_topic": "webhook"
+    },
+    "ideal_response": "The 'signature verification failed' error almost always comes from one of these causes:\n\n1. **Wrong endpoint secret**: You may be using the general API secret key instead of the **webhook endpoint signing secret** (starts with `whsec_`). Get the correct one from Dashboard → Developers → Webhooks → select your endpoint → \"Signing secret\".\n\n2. **Body parsing issue** (most common in Express.js): If you're using `express.json()` middleware, it parses the body before Stripe can verify it. You must pass the **raw body** to `constructEvent`:\n   ```javascript\n   // CORRECT — use raw body\n   app.post('/webhook', express.raw({type: 'application/json'}), (req, res) => {\n       const sig = req.headers['stripe-signature'];\n       const event = stripe.webhooks.constructEvent(req.body, sig, endpointSecret);\n   });\n   ```\n\n3. **CLI vs. Live secret**: If testing with `stripe listen`, use the secret printed by the CLI (`whsec_...`), not the one from the Dashboard.\n\n[Source: Stripe Docs — Check Webhook Signatures]\n[Source: GitHub Issues — Webhook signature verification]",
+    "sources_used": ["docs", "github"],
+    "tags": ["webhook", "signature", "verification", "node.js", "express"]
+  },
+  {
+    "id": "fs_006",
+    "ticket_content": "We're migrating from Charges API to PaymentIntents. What are the key differences and what do we need to change in our integration?",
+    "classification": {
+      "complexity": "complex",
+      "urgency": "low",
+      "primary_topic": "api"
+    },
+    "ideal_response": "The PaymentIntents API replaces the legacy Charges API and is required for SCA (Strong Customer Authentication) compliance. Key differences:\n\n**What changes:**\n\n| Charges API | PaymentIntents API |\n|---|---|\n| `stripe.Charge.create()` | `stripe.PaymentIntent.create()` |\n| Single-step payment | Two-step: create → confirm |\n| No built-in 3D Secure | Automatic 3DS handling |\n| Token-based | PaymentMethod-based |\n\n**Migration steps:**\n1. Replace `source` parameter with `payment_method`\n2. Replace `stripe.Charge.create()` with `stripe.PaymentIntent.create()`\n3. Handle the `requires_action` status (for 3D Secure) on your frontend using `stripe.confirmCardPayment()`\n4. Update webhooks: listen for `payment_intent.succeeded` instead of `charge.succeeded`\n5. For saved cards: migrate `Customer.sources` to `Customer.payment_methods`\n\n**Important**: The Charges API still works but Stripe strongly recommends migrating. New features (like Link, BNPL payment methods) are only available through PaymentIntents.\n\n**Rep note**: This is a significant migration. Recommend pointing the customer to Stripe's official migration guide and suggest they test thoroughly in test mode first.\n\n[Source: Stripe Docs — Migrate to PaymentIntents]\n[Source: Stripe Changelog — Charges API deprecation notices]",
+    "sources_used": ["docs", "changelog"],
+    "tags": ["migration", "charges", "PaymentIntents", "SCA", "3DS"]
+  },
+  {
+    "id": "fs_007",
+    "ticket_content": "Getting 'card_declined' error with decline code 'insufficient_funds' but the customer says they have enough money. What should we tell them?",
+    "classification": {
+      "complexity": "simple",
+      "urgency": "medium",
+      "primary_topic": "billing"
+    },
+    "ideal_response": "The `insufficient_funds` decline code comes directly from the **customer's bank**, not from Stripe. Even if the customer believes they have funds, common reasons include:\n\n1. **Pending holds**: Previous authorizations (gas stations, hotels) may be holding funds that aren't visible in their balance.\n2. **Daily spending limits**: The bank may have a per-transaction or daily limit lower than the charge amount.\n3. **International transaction blocks**: If your Stripe account is in a different country, the bank may block it as a foreign transaction.\n4. **Credit limit**: For credit cards, the available credit may be different from the total limit.\n\n**What to tell the customer:**\n- \"Your card's issuing bank declined this transaction. We recommend contacting your bank to authorize the payment, or trying a different payment method.\"\n\n**What NOT to say**: Never share the specific decline code with the customer — just say the bank declined it.\n\n**Technical note**: You can enable Stripe's Smart Retries on recurring payments (Dashboard → Settings → Subscriptions) to automatically retry failed payments at optimal times.\n\n[Source: Stripe Docs — Declined Payments]\n[Source: Stripe Docs — Decline Codes]",
+    "sources_used": ["docs"],
+    "tags": ["card_declined", "insufficient_funds", "decline_code", "bank"]
+  },
+  {
+    "id": "fs_008",
+    "ticket_content": "How do we handle proration when upgrading a customer's subscription mid-cycle? We want to charge the difference immediately.",
+    "classification": {
+      "complexity": "moderate",
+      "urgency": "low",
+      "primary_topic": "billing"
+    },
+    "ideal_response": "Stripe handles subscription proration automatically. When you update a subscription's price, Stripe calculates the unused time on the old plan and the remaining time on the new plan.\n\n**To charge the difference immediately:**\n```python\nstripe.Subscription.modify(\n    'sub_xxx',\n    items=[{'id': 'si_xxx', 'price': 'price_new_plan'}],\n    proration_behavior='always_invoice',  # Creates and pays invoice immediately\n)\n```\n\n**Proration behavior options:**\n- `create_prorations` (default) — Creates proration line items, charged on next invoice\n- `always_invoice` — Creates AND pays a prorated invoice immediately\n- `none` — No proration at all (customer just switches, no credit/debit)\n\n**Example**: Customer is on $50/month, upgrades to $100/month halfway through the cycle:\n- Credit for unused old plan: -$25\n- Charge for remaining new plan: +$50\n- Net charge: $25 (invoiced immediately with `always_invoice`)\n\n**Rep note**: If the customer wants to preview the proration amount before committing, use the Invoice Preview API:\n```python\nstripe.Invoice.upcoming(customer='cus_xxx', subscription='sub_xxx',\n    subscription_items=[{'id': 'si_xxx', 'price': 'price_new'}])\n```\n\n[Source: Stripe Docs — Subscription Upgrades and Downgrades]\n[Source: Stripe API Reference — Update Subscription]",
+    "sources_used": ["docs"],
+    "tags": ["subscription", "proration", "upgrade", "billing_cycle"]
+  },
+  {
+    "id": "fs_009",
+    "ticket_content": "We're seeing 'rate_limit' errors from the Stripe API during our batch processing. How can we handle this?",
+    "classification": {
+      "complexity": "moderate",
+      "urgency": "medium",
+      "primary_topic": "api"
+    },
+    "ideal_response": "Stripe's API rate limits are **100 read requests/sec** and **100 write requests/sec** in live mode (lower in test mode). When you hit the limit, Stripe returns HTTP 429.\n\n**Immediate fixes:**\n\n1. **Implement exponential backoff**: When you get a 429, wait and retry with increasing delays:\n   ```python\n   import time\n   for attempt in range(5):\n       try:\n           result = stripe.PaymentIntent.create(...)\n           break\n       except stripe.error.RateLimitError:\n           time.sleep(2 ** attempt)  # 1s, 2s, 4s, 8s, 16s\n   ```\n\n2. **Batch with concurrency control**: Don't fire all requests at once. Use a semaphore or queue to limit concurrent requests to ~50/sec.\n\n3. **Use list endpoints with `limit` parameter**: Instead of fetching items one by one, use `stripe.PaymentIntent.list(limit=100)` with auto-pagination.\n\n4. **Cache responses**: If you're reading the same object repeatedly, cache it locally.\n\n**For heavy batch jobs**: Consider running them during off-peak hours and using Stripe's webhook-driven architecture instead of polling.\n\n[Source: Stripe Docs — Rate Limiting]\n[Source: StackOverflow — Stripe rate limit handling]",
+    "sources_used": ["docs", "stackoverflow"],
+    "tags": ["rate_limit", "429", "batch", "backoff", "throttling"]
+  },
+  {
+    "id": "fs_010",
+    "ticket_content": "Is there a way to test webhooks locally during development without deploying to a server?",
+    "classification": {
+      "complexity": "simple",
+      "urgency": "low",
+      "primary_topic": "webhook"
+    },
+    "ideal_response": "Yes! Stripe provides the **Stripe CLI** for local webhook testing. Here's how to set it up:\n\n**Step 1: Install the CLI**\n```bash\n# macOS\nbrew install stripe/stripe-cli/stripe\n\n# Windows (scoop)\nscoop install stripe\n```\n\n**Step 2: Login and forward events**\n```bash\nstripe login\nstripe listen --forward-to localhost:3000/webhook\n```\nThis prints a temporary webhook signing secret (`whsec_...`) — use this in your app instead of the Dashboard secret.\n\n**Step 3: Trigger test events**\n```bash\n# In another terminal\nstripe trigger payment_intent.succeeded\nstripe trigger customer.subscription.created\n```\n\n**Tips:**\n- Use `--events payment_intent.succeeded,charge.failed` to filter specific event types\n- The CLI also lets you view event payloads with `stripe events list`\n- For VS Code users, there's an official Stripe extension with built-in webhook forwarding\n\n[Source: Stripe Docs — Stripe CLI]\n[Source: Stripe Docs — Test Webhooks Locally]",
+    "sources_used": ["docs"],
+    "tags": ["webhook", "local", "testing", "CLI", "development"]
+  },
+  {
+    "id": "fs_011",
+    "ticket_content": "We need to set up Stripe Radar rules to block payments from certain countries and flag high-value transactions for manual review. How do we configure this?",
+    "classification": {
+      "complexity": "moderate",
+      "urgency": "low",
+      "primary_topic": "radar"
+    },
+    "ideal_response": "Stripe Radar lets you create custom fraud rules using a simple rule language. Here's how to set up both scenarios:\n\n**Block payments from specific countries:**\n1. Go to Dashboard → More → Radar → Rules\n2. Add a new \"Block\" rule:\n   ```\n   Block if :card_country: in ('RU', 'NG', 'PK')\n   ```\n\n**Flag high-value transactions for review:**\n1. Add a new \"Review\" rule:\n   ```\n   Review if :amount_in_usd: > 500.00\n   ```\n2. Flagged payments will appear in Dashboard → Payments → Reviews\n\n**Common rule examples:**\n- Block disposable email domains: `Block if :email_domain: in ('tempmail.com', 'guerrillamail.com')`\n- Review first-time customers with large orders: `Review if :is_new_customer: and :amount_in_usd: > 200`\n- Block if CVC check fails: `Block if :cvc_check: = 'fail'`\n\n**Important**: Radar requires at least the **Radar for Fraud Teams** add-on ($0.02/transaction) for custom rules. The default Radar (included free) only provides machine-learning-based blocking.\n\n**Rep note**: Test rules in test mode first. Overly aggressive rules can block legitimate customers.\n\n[Source: Stripe Docs — Radar Rules Reference]\n[Source: Stripe Docs — Radar Overview]",
+    "sources_used": ["docs"],
+    "tags": ["radar", "fraud", "rules", "country_block", "review"]
+  },
+  {
+    "id": "fs_012",
+    "ticket_content": "We're using Stripe Python SDK and getting a weird 'Attempt to decode JSON with unexpected mimetype' error when hitting the webhooks endpoint. Is this a known bug?",
+    "classification": {
+      "complexity": "moderate",
+      "urgency": "high",
+      "primary_topic": "api"
+    },
+    "ideal_response": "This is a known issue that occurs when the Stripe SDK receives an HTML response instead of the expected JSON. This is almost never a Stripe API bug — it means something between your code and Stripe is intercepting the response.\n\n**Most common causes:**\n\n1. **Cloudflare/WAF blocking**: If your outbound requests pass through a corporate proxy or Cloudflare, it may be serving an HTML challenge page. The SDK tries to parse this HTML as JSON and throws the mimetype error.\n   - **Fix**: Whitelist `api.stripe.com` in your proxy/firewall rules.\n\n2. **Wrong base URL**: If you've overridden `stripe.api_base` and it points to a non-Stripe endpoint that returns HTML.\n   - **Fix**: Remove any `stripe.api_base` override, or ensure it's `https://api.stripe.com`.\n\n3. **SSL inspection**: Some corporate networks perform SSL inspection, which can corrupt the response.\n   - **Fix**: Add `api.stripe.com` to your SSL inspection bypass list.\n\n**Debugging step**: Add logging to capture the raw response:\n```python\nimport stripe\nstripe.log = 'debug'  # Prints raw HTTP responses\n```\n\nThis will show you the actual HTML being returned, which will identify the intercepting service.\n\n[Source: GitHub Issues — stripe-python#926]\n[Source: StackOverflow — Stripe mimetype error]",
+    "sources_used": ["github", "stackoverflow"],
+    "tags": ["SDK", "python", "mimetype", "JSON", "proxy", "error"]
+  }
+]

@@ -24,7 +24,6 @@ class IngestionOrchestrator:
     """
     async def run_full_ingestion(self) -> IngestionReport:
         logger.info("Running full ingestion pipeline...")
-        # Placeholder for actual orchestration logic
         return IngestionReport()
 
 # Module-level singleton

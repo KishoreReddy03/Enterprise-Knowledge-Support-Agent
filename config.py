@@ -1,23 +1,32 @@
+"""
+Configuration module for Stripe Support Agent.
+
+Uses pydantic-settings to load and validate environment variables from .env file.
+All required variables will fail with clear error messages if missing.
+"""
+
 import logging
-from typing import ClassVar, Literal
+import sys
+from typing import ClassVar
+
 from pydantic import Field, ValidationError
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
-# Setup logging
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
 )
 logger = logging.getLogger(__name__)
 
+
 class Settings(BaseSettings):
     """
-    Application settings and environment configuration.
+    Application settings loaded from environment variables.
     
-    Loads values from environment variables or .env file.
-    Includes validation for required API keys and connection strings.
+    Required variables will raise a validation error with a clear message if missing.
+    Optional variables have sensible defaults for development.
     """
-    
+
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
@@ -25,72 +34,149 @@ class Settings(BaseSettings):
         extra="ignore",
     )
 
-    # API Keys - All required
-    GROQ_API_KEY: str = Field(..., description="Groq API key for LLM access")
+    # API Keys - All required, no defaults
+    GROQ_API_KEY: str = Field(
+        ...,
+        description="Groq API key for LLM access",
+    )
     
     # Neon Postgres connection (for pgvector operations)
     NEON_DB_URL: str = Field(
         ...,
-        description="Neon Postgres connection string. Format: postgresql://user:password@ep-xxx.region.aws.neon.tech/dbname?sslmode=require",
+        description="Neon Postgres connection string for pgvector operations. Get from Neon dashboard -> Connection Details. Format: postgresql://user:password@ep-xxx.region.aws.neon.tech/dbname?sslmode=require",
     )
     
-    # Upstash Redis (required)
-    UPSTASH_REDIS_REST_URL: str = Field(..., description="Upstash Redis REST URL")
-    UPSTASH_REDIS_REST_TOKEN: str = Field(..., description="Upstash Redis REST token")
+    # Upstash Redis - All required
+    UPSTASH_REDIS_REST_URL: str = Field(
+        ...,
+        description="Upstash Redis REST URL",
+    )
+    UPSTASH_REDIS_REST_TOKEN: str = Field(
+        ...,
+        description="Upstash Redis REST token",
+    )
     
-    # Langfuse Observability
-    LANGFUSE_PUBLIC_KEY: str = Field(..., description="Langfuse public key")
-    LANGFUSE_SECRET_KEY: str = Field(..., description="Langfuse secret key")
-    LANGFUSE_HOST: str = Field("https://cloud.langfuse.com", description="Langfuse host")
-
+    # Langfuse - Required keys with optional host
+    LANGFUSE_PUBLIC_KEY: str = Field(
+        ...,
+        description="Langfuse public key for tracing",
+    )
+    LANGFUSE_SECRET_KEY: str = Field(
+        ...,
+        description="Langfuse secret key for tracing",
+    )
+    LANGFUSE_HOST: str = Field(
+        default="https://cloud.langfuse.com",
+        description="Langfuse host URL",
+    )
+    
     # Environment
-    ENVIRONMENT: Literal["development", "production", "test"] = "development"
+    ENVIRONMENT: str = Field(
+        default="development",
+        description="Runtime environment (development, staging, production)",
+    )
     
-    # LLM Models
-    LLM_FAST_MODEL: str = "llama-3.1-8b-instant"
-    LLM_STRONG_MODEL: str = "llama-3.3-70b-versatile"
-    GROQ_BASE_URL: str = "https://api.groq.com/openai/v1"
-    
-    # Embedding Model
-    EMBEDDING_MODEL: str = "all-MiniLM-L6-v2"
+    # Model configuration
+    LLM_FAST_MODEL: str = Field(
+        default="llama-3.1-8b-instant",
+        description="Fast LLM model for lightweight operations (Groq)",
+    )
+    LLM_STRONG_MODEL: str = Field(
+        default="llama-3.3-70b-versatile",
+        description="Strong LLM model for complex operations (Groq)",
+    )
+    EMBEDDING_MODEL: str = Field(
+        default="all-MiniLM-L6-v2",
+        description="Sentence transformer model for embeddings (384 dimensions)",
+    )
+    GROQ_BASE_URL: str = Field(
+        default="https://api.groq.com/openai/v1",
+        description="Groq API base URL",
+    )
     
     # Thresholds
-    CONFIDENCE_HIGH_THRESHOLD: float = 0.90
-    CONFIDENCE_MEDIUM_THRESHOLD: float = 0.75
-    CONFIDENCE_LOW_THRESHOLD: float = 0.60
-    RETRIEVAL_SIMILARITY_THRESHOLD: float = 0.30
-    MAX_AGENT_RETRIES: int = 2
+    CONFIDENCE_HIGH_THRESHOLD: float = Field(
+        default=0.90,
+        description="Threshold for high confidence responses (auto-send eligible)",
+    )
+    CONFIDENCE_MEDIUM_THRESHOLD: float = Field(
+        default=0.75,
+        description="Threshold for medium confidence responses (review recommended)",
+    )
+    CONFIDENCE_LOW_THRESHOLD: float = Field(
+        default=0.60,
+        description="Threshold for low confidence responses (escalation likely)",
+    )
+    RETRIEVAL_SIMILARITY_THRESHOLD: float = Field(
+        default=0.2,
+        description="Minimum similarity score for retrieved documents (TEMPORARILY LOWERED FOR DEBUG)",
+    )
+    MAX_AGENT_RETRIES: int = Field(
+        default=2,
+        description="Maximum retry attempts for agent operations",
+    )
     
-    # Optional
-    GITHUB_TOKEN: str | None = None
+    # Optional API keys
+    GITHUB_TOKEN: str | None = Field(
+        default=None,
+        description="GitHub personal access token for API access (optional, increases rate limit)",
+    )
 
-    # Sensitive fields for masking
+    # Sensitive fields that should be masked in logs
     _SENSITIVE_FIELDS: ClassVar[set[str]] = {
         "GROQ_API_KEY",
         "NEON_DB_URL",
         "UPSTASH_REDIS_REST_TOKEN",
+        "LANGFUSE_PUBLIC_KEY",
         "LANGFUSE_SECRET_KEY",
         "GITHUB_TOKEN",
     }
 
     def display_config(self) -> None:
-        """Display all configuration values with sensitive fields masked."""
+        """
+        Display all configuration values with sensitive fields masked.
+        
+        Logs each configuration key-value pair, replacing sensitive values with '***'.
+        """
         logger.info("=== Stripe Support Agent Configuration ===")
         for field_name in self.model_fields:
             value = getattr(self, field_name)
-            display_value = "***" if field_name in self._SENSITIVE_FIELDS else value
+            if field_name in self._SENSITIVE_FIELDS:
+                display_value = "***"
+            else:
+                display_value = value
             logger.info(f"{field_name}: {display_value}")
         logger.info("=== End Configuration ===")
 
+
 def get_settings() -> Settings:
-    """Load and validate settings from environment."""
+    """
+    Load and validate settings from environment.
+    
+    Returns:
+        Settings: Validated settings instance.
+        
+    Raises:
+        SystemExit: If required environment variables are missing.
+    """
     try:
         return Settings()
     except ValidationError as e:
         logger.error("Configuration validation failed!")
         for error in e.errors():
-            logger.error(f"  {error['loc']}: {error['msg']}")
-        import sys
+            field = error["loc"][0] if error["loc"] else "unknown"
+            msg = error["msg"]
+            logger.error(f"  Missing or invalid: {field} - {msg}")
+        logger.error(
+            "Please check your .env file and ensure all required variables are set. "
+            "See .env.example for reference."
+        )
         sys.exit(1)
 
+
+# Global settings instance - imported by other modules
 settings = get_settings()
+
+
+if __name__ == "__main__":
+    settings.display_config()

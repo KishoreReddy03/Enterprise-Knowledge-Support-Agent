@@ -1,0 +1,225 @@
+{
+  "_description": "Comprehensive test suite for the Stripe Support Agent. Covers all complexity levels, topics, urgencies, tiers, and edge cases.",
+  "simple_tickets": [
+    {
+      "id": "T001",
+      "scenario": "Clear single-issue question with known answer",
+      "expected_outcome": "RESOLVE with high confidence",
+      "ticket": {
+        "ticket_content": "How do I get my Stripe API keys? I just signed up and can't find them anywhere.",
+        "customer_id": "cust_new_01",
+        "customer_tier": "free"
+      }
+    },
+    {
+      "id": "T002",
+      "scenario": "Common error with well-documented fix",
+      "expected_outcome": "RESOLVE with code example",
+      "ticket": {
+        "ticket_content": "stripe not defined error react help",
+        "customer_id": "cust_so_55",
+        "customer_tier": "free"
+      }
+    },
+    {
+      "id": "T003",
+      "scenario": "Messy input - typos, abbreviations, minimal context",
+      "expected_outcome": "RESOLVE - intake should still classify correctly",
+      "ticket": {
+        "ticket_content": "webhok not recieving events pls hlp its urgent",
+        "customer_id": "cust_typo_01",
+        "customer_tier": "standard"
+      }
+    }
+  ],
+  "moderate_tickets": [
+    {
+      "id": "T004",
+      "scenario": "Multi-step debugging needed, needs context from multiple sources",
+      "expected_outcome": "RESOLVE with diagnostic steps",
+      "ticket": {
+        "ticket_content": "We're using the Stripe Python SDK and getting a weird 'Attempt to decode JSON with unexpected mimetype' error when hitting the webhooks endpoint, or sometimes a MissingMethodException. Is this a known bug in the library or am I implementing it wrong?",
+        "customer_id": "cust_gh_01",
+        "customer_tier": "enterprise"
+      }
+    },
+    {
+      "id": "T005",
+      "scenario": "Subscription billing question requiring proration knowledge",
+      "expected_outcome": "RESOLVE with code example and explanation",
+      "ticket": {
+        "ticket_content": "We need to upgrade a customer from our $49/mo Basic plan to the $149/mo Pro plan mid-cycle. They want to pay the difference today, not wait until next billing date. How do we do this in code?",
+        "customer_id": "cust_bill_03",
+        "customer_tier": "standard"
+      }
+    },
+    {
+      "id": "T006",
+      "scenario": "Webhook signature verification - framework-specific issue",
+      "expected_outcome": "RESOLVE with Express.js specific fix",
+      "ticket": {
+        "ticket_content": "Webhook signature verification keeps failing in our Express.js app. We're using the whsec_ key from the dashboard. Here's our code: app.post('/webhook', (req, res) => { const event = stripe.webhooks.constructEvent(req.body, sig, secret); }) — what are we doing wrong?",
+        "customer_id": "cust_dev_07",
+        "customer_tier": "standard"
+      }
+    },
+    {
+      "id": "T007",
+      "scenario": "Rate limiting during batch operations",
+      "expected_outcome": "RESOLVE with backoff strategy and code",
+      "ticket": {
+        "ticket_content": "we're migrating 50,000 customers to new subscription plans and keep hitting 429 rate limit errors after about 100 requests. is there a way to increase our rate limit or do we need to throttle?",
+        "customer_id": "cust_batch_01",
+        "customer_tier": "enterprise"
+      }
+    }
+  ],
+  "complex_tickets": [
+    {
+      "id": "T008",
+      "scenario": "Multi-system issue spanning Connect + Webhooks + Payouts",
+      "expected_outcome": "RESOLVE or ESCALATE with detailed brief",
+      "ticket": {
+        "ticket_content": "We run a marketplace on Stripe Connect. Sellers are complaining that their payouts are failing with 'insufficient_funds' on the connected account, but the charges went through fine. The webhook for payout.failed fires but our handler crashes because the event payload doesn't include the original charge ID. We need to reconcile these failed payouts with the original orders. How should we architect this?",
+        "customer_id": "cust_connect_15",
+        "customer_tier": "enterprise"
+      }
+    },
+    {
+      "id": "T009",
+      "scenario": "SCA/3D Secure compliance issue across European markets",
+      "expected_outcome": "RESOLVE with regulatory context or ESCALATE",
+      "ticket": {
+        "ticket_content": "We're expanding to the EU and need to support SCA (Strong Customer Authentication). Our current integration uses the old Charges API with Stripe.js v2. We've heard we need to migrate to PaymentIntents + Stripe.js v3 for SCA compliance, but we also have saved cards for thousands of recurring customers. What's the migration path and will our saved cards still work?",
+        "customer_id": "cust_eu_04",
+        "customer_tier": "enterprise"
+      }
+    },
+    {
+      "id": "T010",
+      "scenario": "Contradictory behavior between docs and observed reality",
+      "expected_outcome": "ESCALATE or RESOLVE with caveat about API version",
+      "ticket": {
+        "ticket_content": "According to the docs, setting `payment_intent_data.capture_method = 'manual'` in Checkout Sessions should create an authorized-but-not-captured payment. But when we do this, the payment is being captured immediately anyway. We've verified our code is correct. Is this a bug or did something change recently? We're on API version 2023-10-16.",
+        "customer_id": "cust_bug_02",
+        "customer_tier": "enterprise"
+      }
+    },
+    {
+      "id": "T011",
+      "scenario": "Complex Radar fraud rules with false positives",
+      "expected_outcome": "RESOLVE with rule tuning guidance",
+      "ticket": {
+        "ticket_content": "Our Radar rules are blocking about 15% of legitimate transactions. We have rules blocking certain countries and requiring CVC match, but we're getting too many false positives from our international customers. We can't just turn off the rules because we were getting hit with actual fraud before. How do we tune the rules to reduce false positives without increasing fraud risk?",
+        "customer_id": "cust_radar_09",
+        "customer_tier": "enterprise"
+      }
+    }
+  ],
+  "edge_cases": [
+    {
+      "id": "T012",
+      "scenario": "Angry customer, emotional language, threatens to leave",
+      "expected_outcome": "RESOLVE with empathetic tone, do NOT match the anger",
+      "ticket": {
+        "ticket_content": "THIS IS RIDICULOUS. We've been on Stripe for 3 years paying thousands in fees and your API just randomly started rejecting all our payments. No warning, no email, nothing. Our customers are furious and we're losing money every second. Fix this NOW or we're switching to Adyen.",
+        "customer_id": "cust_angry_01",
+        "customer_tier": "enterprise"
+      }
+    },
+    {
+      "id": "T013",
+      "scenario": "Extremely vague ticket - almost no useful information",
+      "expected_outcome": "RESOLVE with clarifying questions, do NOT guess",
+      "ticket": {
+        "ticket_content": "payments broken",
+        "customer_id": "cust_vague_01",
+        "customer_tier": "free"
+      }
+    },
+    {
+      "id": "T014",
+      "scenario": "Customer asks about a feature Stripe doesn't have",
+      "expected_outcome": "RESOLVE by explaining it's not available + suggest alternative",
+      "ticket": {
+        "ticket_content": "Does Stripe support sending payment links via SMS to our customers? We want to text them a link to pay their invoice directly.",
+        "customer_id": "cust_feature_01",
+        "customer_tier": "standard"
+      }
+    },
+    {
+      "id": "T015",
+      "scenario": "Customer pastes a full stack trace - lots of noise",
+      "expected_outcome": "RESOLVE by extracting the key error from the noise",
+      "ticket": {
+        "ticket_content": "Getting this error in production:\n\nTraceback (most recent call last):\n  File \"/app/payments/views.py\", line 45, in create_payment\n    intent = stripe.PaymentIntent.create(amount=amount, currency='usd')\n  File \"/venv/lib/python3.11/site-packages/stripe/api_resources/payment_intent.py\", line 45\n    raise error.InvalidRequestError('Amount must be at least 50 cents')\nstripe.error.InvalidRequestError: Request req_abc123: Amount must be at least 50 cents. Use `amount` of at least 50.\n\nOur users are trying to pay $0.25 for micro-transactions. Is there a minimum?",
+        "customer_id": "cust_trace_01",
+        "customer_tier": "standard"
+      }
+    },
+    {
+      "id": "T016",
+      "scenario": "Customer asks multiple unrelated questions in one ticket",
+      "expected_outcome": "RESOLVE all questions or acknowledge each one",
+      "ticket": {
+        "ticket_content": "Three quick questions: 1) Can we change our payout schedule from daily to weekly? 2) How do we add a second webhook endpoint for our staging environment? 3) Is there a way to export all our transaction data for the last year as a CSV?",
+        "customer_id": "cust_multi_01",
+        "customer_tier": "standard"
+      }
+    }
+  ],
+  "escalation_scenarios": [
+    {
+      "id": "T017",
+      "scenario": "Production outage - payments completely down",
+      "expected_outcome": "ESCALATE immediately, do NOT attempt to debug",
+      "ticket": {
+        "ticket_content": "ALL payments are failing across all our products since 2pm EST. We process about $50K/hour. Every single charge returns 'card_declined' regardless of card. This is affecting all our customers globally. We need immediate help.",
+        "customer_id": "cust_outage_01",
+        "customer_tier": "enterprise"
+      }
+    },
+    {
+      "id": "T018",
+      "scenario": "Potential data breach / security issue",
+      "expected_outcome": "ESCALATE to security team",
+      "ticket": {
+        "ticket_content": "We found unauthorized charges on our platform from an API key we don't recognize. Someone may have compromised our Stripe secret key. We've already rotated the key but there are about 200 charges in the last 24 hours that we didn't make. How do we investigate this and reverse the fraudulent charges?",
+        "customer_id": "cust_security_01",
+        "customer_tier": "enterprise"
+      }
+    },
+    {
+      "id": "T019",
+      "scenario": "Account suspension / compliance issue",
+      "expected_outcome": "ESCALATE - agent cannot resolve account-level issues",
+      "ticket": {
+        "ticket_content": "Our Stripe account was suddenly restricted and we can't process payments. We got an email saying we need to provide additional documentation but the link in the email leads to a 404 page. We're a legitimate SaaS company and have been operating for 5 years. How do we get our account restored?",
+        "customer_id": "cust_suspended_01",
+        "customer_tier": "enterprise"
+      }
+    }
+  ],
+  "changelog_dependent": [
+    {
+      "id": "T020",
+      "scenario": "Question specifically about recent API changes",
+      "expected_outcome": "RESOLVE using changelog data, mention API versioning",
+      "ticket": {
+        "ticket_content": "Our team is planning to upgrade our API version. Did Stripe recently release any updates or breaking changes to the PaymentIntents API in the latest version releases? I need to know what changed.",
+        "customer_id": "cust_change_11",
+        "customer_tier": "enterprise"
+      }
+    },
+    {
+      "id": "T021",
+      "scenario": "Feature that recently changed behavior",
+      "expected_outcome": "RESOLVE with version-specific answer",
+      "ticket": {
+        "ticket_content": "We just upgraded our Stripe SDK and now our subscription creation code is returning different response fields. The 'plan' field seems to be missing from the subscription object. Did this change recently?",
+        "customer_id": "cust_change_02",
+        "customer_tier": "standard"
+      }
+    }
+  ]
+}

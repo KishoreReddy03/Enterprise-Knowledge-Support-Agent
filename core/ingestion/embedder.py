@@ -22,6 +22,11 @@ class DocumentEmbedder:
             return []
         return self._model.encode(texts).tolist()
 
+    def embed_text(self, text: str) -> list[float]:
+        if not text:
+            return []
+        return self._model.encode(text).tolist()
+
     def upsert_chunks(self, chunks: list[Chunk], collection_name: str) -> dict:
         if not chunks:
             return {"inserted": 0, "failed": 0}

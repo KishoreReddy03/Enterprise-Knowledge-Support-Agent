@@ -1,0 +1,550 @@
+"""
+Synthesis agent for evaluating retrieval quality and detecting contradictions.
+
+This is Level 2 in the orchestration hierarchy. Evaluates whether retrieved
+information is sufficient and consistent, then decides next step.
+"""
+
+import json
+import logging
+from typing import Any
+
+from langfuse import observe
+
+from core.agents.state import ContradictionInfo, SourceResult, TicketState
+from core.llm_client import call_fast, call_strong
+
+logger = logging.getLogger(__name__)
+
+
+class SynthesisAgent:
+    """
+    Evaluates retrieved information and detects contradictions.
+    
+    Uses fast LLM for sufficiency checks (cheap) and
+    strong LLM for contradiction detection (high-value task).
+    """
+
+    SUFFICIENCY_PROMPT = """Evaluate whether these search results can answer the support question.
+
+Support Question:
+{ticket}
+
+Search Results:
+
+DOCUMENTATION:
+{docs}
+
+PAST RESOLUTIONS (GitHub):
+{github}
+
+COMMUNITY ANSWERS (StackOverflow):
+{stackoverflow}
+
+Keep descriptions in 'gaps' extremely brief, reducing the level of detail and verbosity, prioritizing high-level summaries over granular feedback.
+
+Return JSON only, no explanation:
+{{
+    "coverage": "complete|partial|none",
+    "gaps": ["brief high-level summaries of gaps if any"],
+    "has_direct_answer": true/false,
+    "best_source": "documentation|past_resolutions|community|none"
+}}"""
+
+    CONTRADICTION_PROMPT = """Compare these information sources about a Stripe support question.
+
+Sources:
+{formatted_results}
+
+Find contradictions where sources give different information about the same thing (e.g., parameter names, endpoint paths, version behaviors, migration procedures).
+
+CONTRADICTION RESOLUTION RULES (MANDATORY):
+When determining which source is 'likely_correct' and writing the justification, you MUST apply the following weight-based hierarchy:
+
+1. SOURCE CLASS AUTHORITY:
+   - stripe_changelogs: ABSOLUTE HIGHEST AUTHORITY. Represents recent production releases and deprecations. Overrules all other sources.
+   - stripe_docs: HIGH AUTHORITY. Represents official guidelines, but may occasionally lag behind changelogs.
+   - stripe_github_issues: MEDIUM-LOW AUTHORITY. Community workarounds and bug reports; prone to being outdated or highly specific.
+   - stripe_stackoverflow: LOWEST AUTHORITY. Community Q&A; should only be trusted when official docs are silent.
+
+2. FRESHNESS & STALENESS DECAY:
+   - Sources marked "Active/Fresh" must be heavily favored over "Potentially Stale/Outdated" sources.
+   - For sources within the same authority tier, the source with the more recent "Date" takes precedence.
+   - If an outdated official doc conflicts with a fresh community post, note the age/staleness discrepancy and resolve in favor of the most current API state (changelog > fresh doc > fresh community post > stale doc).
+
+Return JSON array only, no explanation:
+[
+    {{
+        "topic": "what they disagree about",
+        "source_a": "what source A says (include chunk/document title)",
+        "source_b": "what source B says (include chunk/document title)", 
+        "likely_correct": "detailed resolution reasoning justifying which source is correct based on authority (changelog > docs > github > stackoverflow) and freshness (date/active status)",
+        "severity": "high|medium|low"
+    }}
+]
+
+Return empty array [] if no contradictions found.
+Only flag actual contradictions, not just different aspects of the same topic."""
+
+    def __init__(self) -> None:
+        """Initialize synthesis agent."""
+        logger.info("SynthesisAgent initialized")
+
+    def _format_results_for_prompt(
+        self,
+        results: list[SourceResult],
+        max_per_source: int = 3,
+    ) -> str:
+        """
+        Format results for inclusion in prompts.
+        
+        Args:
+            results: List of source results.
+            max_per_source: Max results to include.
+            
+        Returns:
+            Formatted string for prompt.
+        """
+        if not results:
+            return "(No results)"
+        
+        formatted: list[str] = []
+        for i, result in enumerate(results[:max_per_source]):
+            text = result.get("text", "")[:500]  # Truncate long texts
+            title = result.get("title", "Untitled")
+            source_url = result.get("source_url", "")
+            formatted.append(f"[{i+1}] {title}\n{text}\nSource: {source_url}")
+        
+        return "\n\n".join(formatted)
+
+    def _format_results_for_contradiction_prompt(
+        self,
+        results: list[SourceResult],
+        max_per_source: int = 5,
+    ) -> str:
+        """
+        Format results for contradiction resolution prompt, detailing authority, date, and staleness.
+        """
+        if not results:
+            return "(No results)"
+        
+        formatted: list[str] = []
+        for i, result in enumerate(results[:max_per_source]):
+            text = result.get("text", "")[:600]
+            title = result.get("title", "Untitled")
+            source_url = result.get("source_url", "")
+            source_type = result.get("source_type", "unknown")
+            date = result.get("date", "Unknown Date")
+            is_stale = result.get("is_stale", False)
+            
+            freshness_status = "⚠️ Potentially Stale/Outdated" if is_stale else "✅ Active/Fresh"
+            
+            formatted.append(
+                f"[{i+1}] Title: {title}\n"
+                f"    Source Type: {source_type}\n"
+                f"    Date: {date}\n"
+                f"    Freshness: {freshness_status}\n"
+                f"    Content: {text}\n"
+                f"    URL: {source_url}"
+            )
+        
+        return "\n\n".join(formatted)
+
+    def _format_all_results_for_contradiction(
+        self,
+        all_results: dict[str, list[SourceResult]],
+    ) -> str:
+        """
+        Format all results for contradiction detection prompt.
+        
+        Args:
+            all_results: Dict of source type to results.
+            
+        Returns:
+            Formatted string for prompt.
+        """
+        sections: list[str] = []
+        
+        for source_type, results in all_results.items():
+            if results:
+                formatted = self._format_results_for_contradiction_prompt(results, max_per_source=5)
+                sections.append(f"=== SOURCE CLASS: {source_type.upper()} ===\n{formatted}")
+        
+        return "\n\n".join(sections)
+
+    async def _check_sufficiency(
+        self,
+        ticket: str,
+        results: dict[str, list[SourceResult]],
+    ) -> dict[str, Any]:
+        """
+        Check if retrieved results are sufficient to answer the ticket.
+        
+        Uses fast LLM for cost efficiency.
+        
+        Args:
+            ticket: The support ticket content.
+            results: Dict of source type to results.
+            
+        Returns:
+            Dict with score (0-1), gaps list, and metadata.
+        """
+        prompt = self.SUFFICIENCY_PROMPT.format(
+            ticket=ticket,
+            docs=self._format_results_for_prompt(results.get("documentation", [])),
+            github=self._format_results_for_prompt(results.get("past_resolutions", [])),
+            stackoverflow=self._format_results_for_prompt(results.get("community_answers", [])),
+        )
+
+        try:
+            response_text = await call_fast(prompt, max_tokens=512)
+            
+            result = self._parse_json(response_text)
+            
+            if result:
+                coverage = result.get("coverage", "")
+                has_direct_answer = result.get("has_direct_answer", False)
+                best_source = result.get("best_source", "none")
+                gaps = result.get("gaps", [])
+                
+                # Check for legacy keys (backward compatibility for older mock tests)
+                if "decision" in result and "score" in result:
+                    return {
+                        "decision": result.get("decision", ""),
+                        "score": float(result.get("score", 0.5)),
+                        "gaps": gaps,
+                        "has_direct_answer": has_direct_answer,
+                        "best_source": best_source,
+                        "parse_failed": False,
+                    }
+                
+                # 100% Deterministic Python Sufficiency Matrix
+                # Map discrete LLM ordinal evaluation to precise internal decisions & scores
+                # Soften the sufficiency evaluator: if coverage is partial but we have strong official sources
+                # (e.g. documentation or past resolutions) and at least one official doc chunk,
+                # we treat it as 'ready' to proceed safely to drafting without retrying or escalating.
+                if has_direct_answer or coverage == "complete":
+                    decision = "ready"
+                    score = 0.85  # Standard compressed maximum score
+                elif coverage == "partial":
+                    has_solid_source = best_source in ("documentation", "past_resolutions")
+                    doc_count = len(results.get("documentation", []))
+                    if has_solid_source and doc_count >= 1:
+                        decision = "ready"
+                        score = 0.70  # Safe for drafting directly
+                        logger.info("Softened sufficiency check: partial coverage upgraded to 'ready' due to official sources")
+                    else:
+                        decision = "need_more"
+                        score = 0.55  # Triggers retry
+                else:
+                    decision = "escalate"
+                    score = 0.45  # Triggers escalation
+                    
+                return {
+                    "decision": decision,
+                    "score": score,
+                    "gaps": gaps,
+                    "has_direct_answer": has_direct_answer,
+                    "best_source": best_source,
+                    "parse_failed": False,
+                }
+            
+        except Exception as e:
+            logger.error(f"Error in sufficiency check: {e}")
+        
+        # Layer 3: Explicit parse failure — named category, not a boundary float.
+        # 'need_more' is the safe default: triggers another retrieval attempt
+        # before any escalation decision is made.
+        return {
+            "decision": "need_more",
+            "score": 0.5,
+            "gaps": ["Sufficiency evaluation unavailable — parse or call failed"],
+            "has_direct_answer": False,
+            "best_source": "none",
+            "parse_failed": True,
+        }
+
+    async def _detect_contradictions(
+        self,
+        results: dict[str, list[SourceResult]],
+    ) -> list[ContradictionInfo]:
+        """
+        Detect contradictions between information sources.
+        
+        Uses strong LLM for high-quality contradiction detection.
+        
+        Args:
+            results: Dict of source type to results.
+            
+        Returns:
+            List of ContradictionInfo dicts.
+        """
+        formatted_results = self._format_all_results_for_contradiction(results)
+        
+        if not formatted_results or formatted_results.count("===") < 2:
+            # Not enough sources to have contradictions
+            return []
+
+        prompt = self.CONTRADICTION_PROMPT.format(
+            formatted_results=formatted_results,
+        )
+
+        try:
+            response_text = await call_strong(prompt, max_tokens=1024)
+            
+            result = self._parse_json(response_text)
+            
+            if isinstance(result, list):
+                contradictions: list[ContradictionInfo] = []
+                for item in result:
+                    contradictions.append(
+                        ContradictionInfo(
+                            source_a=item.get("source_a", ""),
+                            source_b=item.get("source_b", ""),
+                            description=item.get("topic", ""),
+                            resolution=item.get("likely_correct", ""),
+                            severity=item.get("severity", "medium"),
+                        )
+                    )
+                return contradictions
+            
+        except Exception as e:
+            logger.error(f"Error in contradiction detection: {e}")
+        
+        return []
+
+    def _parse_json(self, text: str) -> dict[str, Any] | list[Any] | None:
+        """
+        Parse JSON from model response.
+        
+        Args:
+            text: Raw response text.
+            
+        Returns:
+            Parsed dict/list or None if parsing failed.
+        """
+        # Strip markdown code blocks if present
+        if text.startswith("```"):
+            lines = text.split("\n")
+            text = "\n".join(
+                lines[1:-1] if lines[-1].strip() == "```" else lines[1:]
+            )
+        text = text.replace("```json", "").replace("```", "").strip()
+        
+        try:
+            return json.loads(text)
+        except json.JSONDecodeError as e:
+            logger.warning(f"JSON parse error: {e}")
+            return None
+
+    def _format_context(
+        self,
+        all_results: dict[str, list[SourceResult]],
+        contradictions: list[ContradictionInfo],
+    ) -> str:
+        """
+        Format synthesized context for the drafting agent.
+        
+        Args:
+            all_results: All retrieved results by source.
+            contradictions: Detected contradictions.
+            
+        Returns:
+            Formatted context string for drafting.
+        """
+        sections: list[str] = []
+        
+        # Add results by source type
+        source_names = {
+            "documentation": "Official Stripe Documentation",
+            "past_resolutions": "Past Issue Resolutions (GitHub)",
+            "community_answers": "Community Solutions (StackOverflow)",
+        }
+        
+        for source_key, display_name in source_names.items():
+            results = all_results.get(source_key, [])
+            if results:
+                sections.append(f"## {display_name}\n")
+                for i, result in enumerate(results[:5]):
+                    title = result.get("title", "Untitled")
+                    text = result.get("text", "")[:800]
+                    url = result.get("source_url", "")
+                    chunk_id = result.get("chunk_id") or f"chunk_{source_key}_{i}"
+                    is_stale = result.get("is_stale", False)
+                    stale_marker = " [⚠️ POTENTIALLY OUTDATED]" if is_stale else ""
+                    
+                    sections.append(
+                        f"### Source {i+1}: {title}{stale_marker}\n"
+                        f"[Chunk ID: {chunk_id}]\n"
+                        f"{text}\n"
+                        f"URL: {url}\n"
+                    )
+        
+        # Add contradictions warning if any
+        if contradictions:
+            sections.append("\n## ⚠️ Detected Contradictions\n")
+            for c in contradictions:
+                sections.append(
+                    f"**Topic:** {c['description']}\n"
+                    f"- Source A says: {c['source_a']}\n"
+                    f"- Source B says: {c['source_b']}\n"
+                    f"- Resolution: {c['resolution']}\n"
+                )
+        
+        return "\n".join(sections)
+
+    @observe(name="synthesis_agent")
+    async def process(self, state: TicketState) -> TicketState:
+        """
+        Evaluate retrieval quality and decide next step.
+        
+        Checks if retrieved information is sufficient and consistent,
+        then routes to drafting, more retrieval, or escalation.
+        
+        Args:
+            state: Current ticket state with retrieval results.
+            
+        Returns:
+            Updated state with synthesis decision and context.
+        """
+        # Organize results by source type
+        all_results: dict[str, list[SourceResult]] = {
+            "documentation": state.get("docs_results", []),
+            "past_resolutions": state.get("github_results", []),
+            "community_answers": state.get("stackoverflow_results", []),
+        }
+        
+        total_results = sum(len(v) for v in all_results.values())
+        
+        # Fast path: no results at all
+        if total_results == 0:
+            logger.warning("No retrieval results - escalating")
+            state["synthesis_decision"] = "escalate"
+            state["knowledge_gaps"] = ["No relevant content found in any source"]
+            state["synthesized_context"] = ""
+            state["synthesis_confidence"] = 0.0
+            state["contradictions"] = []
+            state["agent_path"] = ["synthesis"]
+            return state
+
+        # Sufficiency check with Haiku (cheap)
+        logger.info("Running sufficiency check...")
+        sufficiency = await self._check_sufficiency(
+            ticket=state.get("ticket_content", ""),
+            results=all_results,
+        )
+        
+        state["knowledge_gaps"] = sufficiency.get("gaps", [])
+        
+        # Contradiction check with Sonnet (only if we have enough content)
+        contradictions: list[ContradictionInfo] = []
+        if sufficiency["score"] >= 0.6:
+            logger.info("Running contradiction detection...")
+            contradictions = await self._detect_contradictions(all_results)
+            if contradictions:
+                logger.info(f"Found {len(contradictions)} contradiction(s)")
+        
+        state["contradictions"] = contradictions
+        
+        # Routing decision
+        # Thresholds tuned for MiniLM-L6-v2 which produces lower similarity
+        # scores than large models. We want to attempt drafting whenever
+        # we have *any* related context, and only escalate when truly empty.
+        total_results = sum(len(v) for v in all_results.values())
+        
+        # Layer 3: Track parse failures explicitly in state
+        if sufficiency.get("parse_failed"):
+            state["llm_parse_failures"] = ["sufficiency_check"]
+            logger.warning(
+                "Sufficiency check parse failed — routing to 'need_more' as safe default"
+            )
+
+        # Layer 1: Prefer categorical LLM decision over float threshold comparison
+        _VALID_DECISIONS = {"ready", "need_more", "escalate"}
+        llm_decision = sufficiency.get("decision", "")
+        retry_count = state.get("retrieval_retry_count", 0)
+
+        if llm_decision in _VALID_DECISIONS:
+            # Deterministic hard override: retry cap forces 'ready' regardless of LLM
+            if llm_decision == "need_more" and retry_count >= 1:
+                state["synthesis_decision"] = "ready"
+                logger.warning(
+                    f"Forcing synthesis decision: ready after {retry_count} retrieval retries "
+                    f"(LLM categorical decision was need_more)"
+                )
+            elif llm_decision == "need_more":
+                state["synthesis_decision"] = "need_more"
+                state["retrieval_retry_count"] = retry_count + 1
+                logger.info(
+                    f"Synthesis decision: need_more (categorical LLM output, "
+                    f"score={sufficiency['score']:.2f})"
+                )
+            else:
+                state["synthesis_decision"] = llm_decision
+                logger.info(
+                    f"Synthesis decision: {llm_decision} (categorical LLM output, "
+                    f"score={sufficiency['score']:.2f}, results={total_results})"
+                )
+        else:
+            # Threshold fallback — LLM did not return a valid decision enum
+            logger.warning(
+                f"LLM returned invalid decision '{llm_decision}' — "
+                f"falling back to threshold routing"
+            )
+            if sufficiency["score"] >= 0.50 or total_results >= 5:
+                state["synthesis_decision"] = "ready"
+                logger.info(
+                    f"Synthesis decision (threshold fallback): ready "
+                    f"(score={sufficiency['score']:.2f}, results={total_results})"
+                )
+            elif sufficiency["score"] >= 0.15:
+                if retry_count >= 1:
+                    state["synthesis_decision"] = "ready"
+                    logger.warning(
+                        f"Forcing synthesis decision: ready after {retry_count} retrieval retries"
+                    )
+                else:
+                    state["synthesis_decision"] = "need_more"
+                    state["retrieval_retry_count"] = retry_count + 1
+                    logger.info(
+                        f"Synthesis decision (threshold fallback): need_more "
+                        f"(score={sufficiency['score']:.2f})"
+                    )
+            else:
+                state["synthesis_decision"] = "escalate"
+                logger.info(
+                    f"Synthesis decision (threshold fallback): escalate "
+                    f"(score={sufficiency['score']:.2f})"
+                )
+        
+        # Format context for drafting agent
+        state["synthesized_context"] = self._format_context(all_results, contradictions)
+        state["synthesis_confidence"] = sufficiency["score"]
+        
+        # Track agent path
+        state["agent_path"] = ["synthesis"]
+        
+        return state
+
+    def route(self, state: TicketState) -> str:
+        """
+        Get routing decision from synthesis output.
+        
+        Args:
+            state: Ticket state with synthesis decision.
+            
+        Returns:
+            Route name based on synthesis_decision.
+        """
+        decision = state.get("synthesis_decision", "need_more")
+        
+        if decision == "ready":
+            return "drafting"
+        elif decision == "need_more":
+            return "additional_retrieval"
+        else:
+            return "escalate"
+
+
+# Module-level instance
+synthesis_agent = SynthesisAgent()

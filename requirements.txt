@@ -1,15 +1,31 @@
-fastapi
-uvicorn
-pydantic>=2.0.0
-pydantic-settings
-httpx==0.25.2
-psycopg2-binary
-sentence-transformers
-redis
-python-dotenv
-tqdm
-beautifulsoup4
-langfuse
-ragas
-openai
-python-multipart
+# Stripe Support Agent - Python Dependencies
+
+# Configuration management
+pydantic-settings>=2.0.0
+
+# Text processing
+tiktoken>=0.5.0
+beautifulsoup4>=4.12.0
+
+# Embeddings and vector storage
+sentence-transformers>=2.2.0
+psycopg2-binary>=2.9.0
+pgvector>=0.2.0
+
+# Utilities
+tqdm>=4.65.0
+
+# Web scraping and HTTP
+aiohttp>=3.9.0
+httpx>=0.25.0
+
+# API Framework
+fastapi>=0.109.0
+uvicorn[standard]>=0.27.0
+
+# LLM
+openai>=1.0.0
+langgraph>=0.0.40
+
+# Observability
+langfuse>=2.0.0

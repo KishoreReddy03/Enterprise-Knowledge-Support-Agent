@@ -16,15 +16,19 @@ def get_client() -> AsyncOpenAI:
         )
     return _client
 
-async def call_fast(prompt: str, max_tokens: int = 512, temperature: float = 0.0) -> str:
+async def call_fast(prompt: str, max_tokens: int = 512, temperature: float = 0.0, system: str | None = None) -> str:
     """
     Call the fast LLM (e.g., Llama-3.1-8B-instant) for high-speed tasks.
     """
     try:
         client = get_client()
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
         response = await client.chat.completions.create(
             model=settings.LLM_FAST_MODEL,
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             max_tokens=max_tokens,
             temperature=temperature,
         )
@@ -33,15 +37,19 @@ async def call_fast(prompt: str, max_tokens: int = 512, temperature: float = 0.0
         logger.error(f"Error calling fast LLM: {e}")
         raise
 
-async def call_strong(prompt: str, max_tokens: int = 2048, temperature: float = 0.0) -> str:
+async def call_strong(prompt: str, max_tokens: int = 2048, temperature: float = 0.0, system: str | None = None) -> str:
     """
     Call the strong LLM (e.g., Llama-3.3-70B-versatile) for complex reasoning tasks.
     """
     try:
         client = get_client()
+        messages = []
+        if system:
+            messages.append({"role": "system", "content": system})
+        messages.append({"role": "user", "content": prompt})
         response = await client.chat.completions.create(
             model=settings.LLM_STRONG_MODEL,
-            messages=[{"role": "user", "content": prompt}],
+            messages=messages,
             max_tokens=max_tokens,
             temperature=temperature,
         )

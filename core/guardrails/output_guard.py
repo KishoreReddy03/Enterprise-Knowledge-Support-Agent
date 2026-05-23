@@ -193,46 +193,24 @@ class OutputGuard:
         self,
         reply: str,
         context: str,
-        retrieved_chunks: list[dict] = None,
     ) -> list[str]:
         """
         Check if the reply contains claims not grounded in sources.
 
-        Uses the high-fidelity NLI GroundingVerifier + physical Token Gate Override
-        if retrieved_chunks are provided. Otherwise, falls back to prompt fact-checking.
+        Falls back to prompt fact-checking when NLI verifier is unavailable.
 
         Args:
             reply: Draft reply text.
             context: The synthesized context from retrieval.
-            retrieved_chunks: Optional raw retrieved chunk dicts for strict token gating.
 
         Returns:
             List of potentially hallucinated claims.
         """
-        if not reply:
+        if not reply or not context:
             return []
 
         # Skip if reply is very short (likely a clarifying question)
         if len(reply.split()) < 20:
-            return []
-
-        # High-Fidelity NLI + Deterministic Token Gate Override
-        if retrieved_chunks:
-            try:
-                from core.guardrails.grounding_verifier import GroundingVerifier
-                verifier = GroundingVerifier()
-                report = await verifier.verify_grounding(reply, retrieved_chunks)
-                if not report.is_safe or report.grounding_score < 1.0:
-                    logger.warning(
-                        f"GroundingVerifier flagged {len(report.ungrounded_segments)} ungrounded claims"
-                    )
-                    return report.ungrounded_segments
-                return []
-            except Exception as e:
-                logger.error(f"GroundingVerifier in OutputGuard failed, falling back to prompt check: {e}")
-
-        # Fallback to prompt-based check
-        if not context:
             return []
 
         try:
@@ -345,12 +323,12 @@ If all claims are supported, return: []"""
                 logger.error(f"GroundingVerifier in OutputGuard failed, falling back to prompt check: {e}")
                 # Fallback to prompt-based check
                 hallucination_flags = await self._check_hallucination(
-                    draft_reply, synthesized_context, retrieved_chunks=None
+                    draft_reply, synthesized_context
                 )
         else:
             # Fallback to prompt-based check
             hallucination_flags = await self._check_hallucination(
-                draft_reply, synthesized_context, retrieved_chunks=None
+                draft_reply, synthesized_context
             )
 
         if hallucination_flags:

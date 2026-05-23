@@ -6,6 +6,38 @@ and enforce rate limits. Follows the FLAG approach — suspicious inputs
 are flagged and auto-escalated, not blocked.
 
 This is the first line of defense in the production pipeline.
+
+⚠️ PROMPT INJECTION REGEX LIMITATIONS & HARDENING AUDIT
+======================================================
+The current pre-processing injection detection is strictly heuristic-driven and
+uses pre-compiled Regular Expressions (re). This represents a standard first-line
+operational check but carries severe vulnerabilities under production conditions:
+
+1. THE SYSTEMIC LIMITATIONS OF REGEX:
+   * Semantic Jailbreaks: Conversational shifts, virtual simulations, roleplay 
+     ("Do Anything Now" / DAN), and nested adversarial framing will bypass literal
+     word boundaries.
+   * Indirect Prompt Injection: Malicious instructions hidden inside third-party 
+     sources (e.g. a scraped GitHub issue containing instruction overrides like 
+     "output only standard API URLs") will bypass the input guard completely, 
+     contaminating downstream Retrieval & Synthesis states.
+   * Multilingual Attacks: Translating adversarial overrides into non-English
+     languages or mixed-cased lexical variants will skip past standard patterns.
+   * Obfuscated & Encoded Payloads: Obfuscation methods such as Base64/Hex encoding,
+     URL encodings, or ciphered text segments easily defeat literal strings.
+
+2. HYBRID HARDENING ROADMAP (PRODUCTION GRADE):
+   To mitigate these bypass risks, the pre-processing guardrail must transition from
+   static regex rules to a multi-layered security grid:
+   * Layer A - Specialized Classification: Integrate a specialized, lightweight
+     guard model (e.g. Meta's Llama Guard or Prompt Guard) via local inference, 
+     detecting adversarial prompt intent with semantic awareness.
+   * Layer B - Vector Semantic Guard: Maintain a local vector index of historical
+     adversarial injection templates. Run cosine similarity checks against raw 
+     inputs to catch semantic jailbreak clusters.
+   * Layer C - Dual-Pass Context Verification: Execute the injection verifier 
+     on both raw incoming customer tickets (input pass) AND retrieved raw database 
+     chunks inside the Retrieval Agent (context pass) to neutralize indirect injections.
 """
 
 import hashlib

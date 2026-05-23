@@ -60,6 +60,12 @@ FAILURE_THRESHOLD = 3        # Open circuit after N consecutive failures
 COOLDOWN_SECONDS = 30        # Wait N seconds before trying again (half-open)
 FAILURE_WINDOW_SECONDS = 60  # Reset failure count if no failures for N seconds
 
+# ⚠️ NO LATENCY-TRIGGERED DEGRADATION LIMITATION
+# The current circuit breaker reacts strictly to hard failures (exceptions, 5xx errors, and raw timeouts).
+# It does NOT react to latency degradation (where requests succeed but take an anomalous amount of time).
+# Latency-triggered degradation (e.g., dynamically degrading agent retrieval depths or shifting to faster,
+# lightweight LLM models when p95 latency spikes) is an important future enhancement for system stability.
+
 
 class CircuitBreaker:
     """

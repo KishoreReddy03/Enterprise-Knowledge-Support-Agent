@@ -8,6 +8,35 @@ States:
     CLOSED  → Normal operation. Requests go through.
     OPEN    → Service is down. Return fallback immediately.
     HALF_OPEN → Testing recovery. Allow ONE request through.
+
+⚠️ RESILIENCY & CIRCUIT BREAKER HARDENING AUDIT
+=============================================
+The current circuit breaker implementation relies on a static, heuristic-driven
+threshold model (e.g. static failure thresholds and rigid cooldown limits). While
+adequate for basic containment, this design poses operational risks under production load:
+
+1. THE LIMITATIONS OF STATIC HEURISTICS:
+   * No Adaptive Scaling: At high query volumes, a minor network hiccup can trigger 
+     3 consecutive failures almost instantly, tripping the circuit breaker and 
+     routing standard tickets directly to fallback escalation unnecessarily.
+   * Provider-Blind Architecture: The circuit is locked onto a single provider ("groq")
+     and lacks multi-provider health routing. If Groq degrades, the system escalates 
+     directly to human agents instead of failing over to backup providers (e.g. OpenAI/Anthropic).
+   * Latency-Blind Trips: The circuit only trips on raw API failure responses (5xx, timeouts).
+     It does not detect latency degradation (e.g., requests succeeding but taking 30s),
+     which can exhaust downstream client thread pools.
+
+2. RESILIENCE HARDENING ROADMAP:
+   To elevate system resilience under heavy loads, we plan to transition the circuit 
+   breaker to an adaptive, intelligent reliability grid:
+   * Layer A - Adaptive Thresholds: Dynamically adjust the failure trigger using a 
+     sliding window error rate percentage (e.g. trip if > 15% of requests fail over a 
+     5-minute window) rather than raw consecutive counts.
+   * Layer B - Provider-Aware Reliability Scoring: Calculate a real-time Health Index
+     Score per provider based on successful request latency and success rates. Use this 
+     index to dynamically fail over to alternative API endpoints before tripping the circuit.
+   * Layer C - Latency-Aware Circuit Logic: Trip the circuit (or degrade search depth/LLM complexity)
+     if the sliding p95 latency exceeds 5.0 seconds, preserving system response speeds.
 """
 
 import logging

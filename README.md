@@ -85,33 +85,7 @@ The core ticket processing lifecycle is orchestrated as an asynchronous multi-ag
 
 For the complete visual breakdown, export guidelines, and a step-by-step flowchart terminology guide, see the [Agent Workflow Diagram](agent_workflow_diagram.md).
 
-```text
-                        ┌─────────── Ticket Received ───────────┐
-                        │                                       │
-                        ▼                                       ▼
-            [Input Security Guardrail]               [Circuit Breaker Check]
-                        │                                       │
-                        ▼                                       ▼
-             [Semantic Cache Check] ─────────────────> (Cache Fast Return)
-                        │ (Cache Miss)
-                        ▼
-             [Intake Agent (Classifier)] ────────────> (Confidence Escalation)
-                        │
-                        ▼
-            [Retrieval Agent (Budget)] ──────────────> [Cross-Encoder Reranker]
-                        │                                       │
-                        ├───────────────────────────────────────┘
-                        ▼
-            [Synthesis Agent (Resolve)] ─────────────> [Drafting Agent (Few-Shot)]
-                        │                                       │
-                        ▼                                       ▼
-            [Quality Gate (NLI + Override)] <───────── (Self-Correction Loop)
-                        │
-                        ▼
-            [Citation Attribution Verifier] ─────────> [Output Security Guardrail]
-                        │                                       │
-                        ▼                                       ▼
-             (Downstream Ingestion Log) ─────────────> (Customer Sent)
+
 ```
 
 ### 1. The Core Support Agents

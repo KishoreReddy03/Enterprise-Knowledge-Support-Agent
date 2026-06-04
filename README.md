@@ -144,12 +144,6 @@ Cross-references every inline citation marker (e.g. `[1]`, `[2]`) against the ve
 
 ## ⚡ API Services (`api/`)
 
-Built on FastAPI, the API layer provides high-performance telemetry, ticket orchestration, and analytical feedback routes:
-*   `POST /api/tickets/process`: Receives developer tickets, executes the LangGraph multi-agent loop asynchronously, and returns cached fast tracks or formatted agent/human escalation JSON.
-*   `POST /api/feedback/submit`: Registers developer validation feedback (thumbs-up/down) and updates the local Redis cache.
-*   `POST /api/evaluation/run`: Triggers parallel evaluation scorecards over query benchmarks, logging retrieval precision and citation-level grounding details.
-*   `GET /api/analytics/summary`: Exposes core metrics, average latency distributions, grounding quality tracking, cache hit rates, and common knowledge gaps.
-
 ---
 
 ## ✂️ Semantic Chunking

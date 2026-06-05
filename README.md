@@ -146,16 +146,6 @@ Cross-references every inline citation marker (e.g. `[1]`, `[2]`) against the ve
 
 ---
 
-## ✂️ Semantic Chunking
-Embedding quality cannot compensate for broken chunk semantics. We use `chunker.py` to handle:
-- **Markdown Header Splitting**: Respecting logical document hierarchy.
-- **Recursive Character Splitting**: Preserving the contextual thread within boundaries.
-
----
-
-## 🚀 Getting Started
-
-### 1. Installation
 ```bash
 # Clone and enter directory
 cd Enterprise-Knowledge-Support-Agent

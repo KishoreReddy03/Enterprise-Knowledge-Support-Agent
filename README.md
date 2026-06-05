@@ -140,6 +140,13 @@ Cross-references every inline citation marker (e.g. `[1]`, `[2]`) against the ve
 > 2. **Human Feedback**: engineer triage evaluations and human-in-the-loop validation labels.
 > 3. **Historical Outcomes**: Long-term database performance metrics correlating quality-gated ratings against downstream ticket reopen rates.
 
+### 5. High-Availability & Fast Fallback (Groq + Gemini)
+To meet strict production availability and latency guarantees, the LLM client features an automated, fast fallback mechanism:
+* **Latency Budget**: Total execution budget is capped below **5.0 seconds** (complying with standard SLA boundaries).
+* **Primary Route**: All calls initially target Groq (`LLM_FAST_MODEL`/`LLM_STRONG_MODEL`) with a strict request timeout of **2.5 seconds** (`LLM_GROQ_TIMEOUT`).
+* **Fallback Route**: If Groq times out, experiences rate limiting, or fails, the client immediately switches to the Gemini API (`LLM_FALLBACK_FAST_MODEL`/`LLM_FALLBACK_STRONG_MODEL`) with a strict timeout of **2.0 seconds** (`LLM_GEMINI_TIMEOUT`), routing calls via the OpenAI-compatible endpoint.
+* **Error Chaining**: If both services fail, the resulting exception is chained (`raise gemini_err from groq_err`) to preserve full debugging context for logs and tracing systems.
+
 ---
 
 ## ⚡ API Services (`api/`)
@@ -204,4 +211,7 @@ python scripts/test_quality_gate_robustness.py
 
 # 7. Test E2E Grounding Loops & Deterministic Token Override Gates
 python scripts/test_grounding_loop_e2e.py
+
+# 8. Test High-Availability Fallback & Latency Budgeting
+python scripts/test_llm_fallback.py
 ```

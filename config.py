@@ -94,6 +94,32 @@ class Settings(BaseSettings):
         description="Groq API base URL",
     )
     
+    # Gemini Fallback configuration
+    GEMINI_API_KEY: str | None = Field(
+        default=None,
+        description="Gemini API key for fallback operations",
+    )
+    GEMINI_BASE_URL: str = Field(
+        default="https://generativelanguage.googleapis.com/v1beta/openai/",
+        description="Gemini API base URL for OpenAI compatibility",
+    )
+    LLM_FALLBACK_FAST_MODEL: str = Field(
+        default="gemini-2.5-flash",
+        description="Gemini fallback model for fast tasks",
+    )
+    LLM_FALLBACK_STRONG_MODEL: str = Field(
+        default="gemini-2.5-pro",
+        description="Gemini fallback model for strong tasks",
+    )
+    LLM_GROQ_TIMEOUT: float = Field(
+        default=2.5,
+        description="Timeout for Groq calls in seconds",
+    )
+    LLM_GEMINI_TIMEOUT: float = Field(
+        default=2.0,
+        description="Timeout for Gemini fallback calls in seconds",
+    )
+    
     # Thresholds
     CONFIDENCE_HIGH_THRESHOLD: float = Field(
         default=0.90,
@@ -125,6 +151,7 @@ class Settings(BaseSettings):
     # Sensitive fields that should be masked in logs
     _SENSITIVE_FIELDS: ClassVar[set[str]] = {
         "GROQ_API_KEY",
+        "GEMINI_API_KEY",
         "NEON_DB_URL",
         "UPSTASH_REDIS_REST_TOKEN",
         "LANGFUSE_PUBLIC_KEY",

@@ -165,7 +165,21 @@ python -m venv venv
 .\venv\Scripts\activate  # Windows
 source venv/bin/activate  # macOS/Linux
 
+# Install dependencies
+pip install -r requirements.txt
+```
 
+### 2. Verify neon Database
+Ensure your Neon PostgreSQL is connected and holds seeded records:
+```bash
+python scripts/check_db_counts.py
+```
+
+### 3. Run Ingestion Pipelines
+To index standard API documentation, changelogs, and forum issues:
+```bash
+python scripts/run_ingestion.py
+```
 
 ### 4. Execute the Verification Test Suite
 We built a highly thorough validation suite to verify the multi-agent orchestration, cache layers, routing systems, and guardrails:

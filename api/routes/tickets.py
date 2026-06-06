@@ -43,6 +43,10 @@ class TicketProcessRequest(BaseModel):
         default="standard",
         description="Customer tier for prioritization",
     )
+    session_id: str | None = Field(
+        default=None,
+        description="Optional active conversational session ID",
+    )
 
 
 class SourceCited(BaseModel):
@@ -57,6 +61,7 @@ class TicketProcessResponse(BaseModel):
     """Response from ticket processing."""
     
     ticket_id: str = Field(description="Unique ticket identifier")
+    session_id: str = Field(description="Active or newly created conversational session ID")
     draft_reply: str = Field(description="AI-generated reply text")
     confidence_score: float = Field(
         ge=0.0,
@@ -161,12 +166,15 @@ async def process_ticket_endpoint(
             ticket_content=body.ticket_content,
             customer_id=body.customer_id or "unknown",
             customer_tier=body.customer_tier,
+            ticket_id=ticket_id,
+            session_id=body.session_id,
         )
         
         processing_time_ms = int((time.time() - start_time) * 1000)
         
         # Extract response data
         final_response = result.get("final_response", {})
+        active_session_id = result.get("session_id", body.session_id or ticket_id)
         
         # Format sources
         sources_cited = []
@@ -179,7 +187,7 @@ async def process_ticket_endpoint(
             ))
         
         logger.info(
-            f"Ticket {ticket_id} processed | "
+            f"Ticket {ticket_id} processed | session_id={active_session_id} | "
             f"time_ms={processing_time_ms} | "
             f"confidence={result.get('confidence_score', 0.0):.2f} | "
             f"escalated={result.get('escalated', False)}"
@@ -187,6 +195,7 @@ async def process_ticket_endpoint(
         
         return TicketProcessResponse(
             ticket_id=ticket_id,
+            session_id=active_session_id,
             draft_reply=final_response.get("reply_text", ""),
             confidence_score=result.get("confidence_score", 0.0),
             rep_guidance=final_response.get("rep_guidance", "Review before sending."),

@@ -27,17 +27,19 @@ import re
 
 logger = logging.getLogger(__name__)
 
-
 class BaseClassifier(ABC):
     """Abstract base class for all intake classification backends."""
 
     @abstractmethod
-    async def classify(self, ticket_content: str) -> dict[str, Any] | None:
+    async def classify(
+        self, ticket_content: str, chat_history: list[dict] | None = None
+    ) -> dict[str, Any] | None:
         """
         Classify ticket content.
 
         Args:
             ticket_content: The support ticket body string.
+            chat_history: Optional previous chat history turns.
 
         Returns:
             Dictionary containing complexity, urgency, primary_topic,
@@ -52,14 +54,16 @@ class LLMClassifier(BaseClassifier):
     def __init__(self, agent: "IntakeAgent") -> None:
         self.agent = agent
 
-    async def classify(self, ticket_content: str) -> dict[str, Any] | None:
+    async def classify(
+        self, ticket_content: str, chat_history: list[dict] | None = None
+    ) -> dict[str, Any] | None:
         # First attempt
-        result = await self.agent._call_fast_llm(ticket_content, is_retry=False)
+        result = await self.agent._call_fast_llm(ticket_content, is_retry=False, chat_history=chat_history)
         
         if result is None:
             # Retry with explicit JSON instruction
             logger.warning("First parse failed, retrying with explicit prompt")
-            result = await self.agent._call_fast_llm(ticket_content, is_retry=True)
+            result = await self.agent._call_fast_llm(ticket_content, is_retry=True, chat_history=chat_history)
             
         return result
 
@@ -75,9 +79,11 @@ class VerifiedLLMClassifier(BaseClassifier):
         self._llm = LLMClassifier(agent)
         self._heuristic = DeterministicHeuristicClassifier()
 
-    async def classify(self, ticket_content: str) -> dict[str, Any] | None:
-        llm_result = await self._llm.classify(ticket_content)
-        heuristic_result = await self._heuristic.classify(ticket_content)
+    async def classify(
+        self, ticket_content: str, chat_history: list[dict] | None = None
+    ) -> dict[str, Any] | None:
+        llm_result = await self._llm.classify(ticket_content, chat_history=chat_history)
+        heuristic_result = await self._heuristic.classify(ticket_content, chat_history=chat_history)
 
         if llm_result and heuristic_result:
             # If urgency disagrees, flag as lower confidence
@@ -130,7 +136,9 @@ class DeterministicHeuristicClassifier(BaseClassifier):
         # Common error code patterns
         self.error_code_pattern = re.compile(r"\b([a-z0-9_]+_error|[a-z0-9_]+_missing|err_[a-z0-9_]+)\b", re.I)
 
-    async def classify(self, ticket_content: str) -> dict[str, Any] | None:
+    async def classify(
+        self, ticket_content: str, chat_history: list[dict] | None = None
+    ) -> dict[str, Any] | None:
         content_lower = ticket_content.lower()
         
         # 1. Determine primary topic
@@ -337,6 +345,38 @@ Urgency guide:
 
 Return valid JSON only."""
 
+    CONVERSATIONAL_INTAKE_PROMPT = """Analyze this support ticket in the context of the conversation history. Return JSON only.
+No explanation. No markdown. Just the JSON object.
+
+CONVERSATION HISTORY:
+{history_formatted}
+
+NEW CUSTOMER TICKET:
+{ticket_content}
+
+{{
+    "complexity": "simple|moderate|complex",
+    "urgency": "low|medium|high|critical",
+    "primary_topic": "webhook|billing|connect|auth|api|radar|other",
+    "error_codes": ["list of any error codes mentioned, empty list if none"],
+    "search_keywords": ["3-5 core search keywords (e.g. 'PaymentIntents', 'upgrade', 'API')"],
+    "is_about_deprecated_feature": false,
+    "confidence": 0.85,
+    "topic_shift": false,
+    "rewritten_query": "standalone search query"
+}}
+
+CRITICAL GUIDELINES:
+1. 'topic_shift' (Boolean):
+   - You MUST set this to true if the customer's new ticket shifts to a completely different, unrelated topic from the conversation history (e.g., shifting from python webhook verification to billing invoices, or from custom accounts to billing).
+   - Set this to false if the ticket is a follow-up, clarification, or directly relates to the context/issues discussed in the conversation history.
+
+2. 'rewritten_query' (String):
+   - If 'topic_shift' is true, set 'rewritten_query' to the exact raw NEW CUSTOMER TICKET content.
+   - If 'topic_shift' is false, rewrite the query as a standalone search query that incorporates essential context from the conversation history (e.g., specific SDKs, technical features, error codes) so that search engines can locate relevant information. Remove any ambiguous pronouns.
+
+Return valid JSON only."""
+
     RETRY_PROMPT = """Your previous response was not valid JSON. 
 Return ONLY a valid JSON object with no additional text.
 No markdown code blocks. No explanation.
@@ -388,6 +428,9 @@ Required JSON structure:
             logger.warning("Empty ticket content, using defaults")
             return self._apply_defaults(state)
 
+        chat_history = state.get("chat_history", [])
+        is_conversational = len(chat_history) > 0
+
         # Check cache for repeated tickets to optimize tokens and latency
         clean_content = ticket_content.strip()
         content_hash = hashlib.md5(clean_content.lower().encode('utf-8')).hexdigest()
@@ -403,24 +446,27 @@ Required JSON structure:
         except Exception as e:
             logger.warning(f"Failed to load feedback history from cache: {e}")
             
-        try:
-            redis_client = get_redis_client()
-            cached = await redis_client.get_json(cache_key)
-            if cached:
-                logger.info(f"[CACHE HIT] Found intake classification for query hash {content_hash}")
-                state["complexity"] = self._validate_complexity(cached.get("complexity"))
-                state["urgency"] = self._validate_urgency(cached.get("urgency"))
-                state["primary_topic"] = self._validate_topic(cached.get("primary_topic"))
-                state["error_codes"] = self._validate_error_codes(cached.get("error_codes"))
-                state["search_keywords"] = cached.get("search_keywords", [])
-                state["intake_confidence"] = self._validate_confidence(cached.get("confidence"))
-                state["agent_path"] = ["intake"]
-                return state
-        except Exception as e:
-            logger.warning(f"Failed to check intake cache: {e}")
-
-        # Cache miss - perform classification via pluggable classifier
-        result = await self.classifier.classify(ticket_content)
+        if not is_conversational:
+            try:
+                redis_client = get_redis_client()
+                cached = await redis_client.get_json(cache_key)
+                if cached:
+                    logger.info(f"[CACHE HIT] Found intake classification for query hash {content_hash}")
+                    state["complexity"] = self._validate_complexity(cached.get("complexity"))
+                    state["urgency"] = self._validate_urgency(cached.get("urgency"))
+                    state["primary_topic"] = self._validate_topic(cached.get("primary_topic"))
+                    state["error_codes"] = self._validate_error_codes(cached.get("error_codes"))
+                    state["search_keywords"] = cached.get("search_keywords", [])
+                    state["intake_confidence"] = self._validate_confidence(cached.get("confidence"))
+                    state["topic_shift"] = False
+                    state["rewritten_query"] = ticket_content
+                    state["agent_path"] = ["intake"]
+                    return state
+            except Exception as e:
+                logger.warning(f"Failed to check intake cache: {e}")
+                
+        # Cache miss or conversational follow-up - perform classification via pluggable classifier
+        result = await self.classifier.classify(ticket_content, chat_history=chat_history)
         
         if result is None:
             # Classification failed - use safe defaults
@@ -434,6 +480,8 @@ Required JSON structure:
         state["error_codes"] = self._validate_error_codes(result.get("error_codes"))
         state["search_keywords"] = result.get("search_keywords", [])
         state["intake_confidence"] = self._validate_confidence(result.get("confidence"))
+        state["topic_shift"] = bool(result.get("topic_shift", False))
+        state["rewritten_query"] = str(result.get("rewritten_query", ticket_content))
         
         # Track agent path
         state["agent_path"] = ["intake"]
@@ -441,24 +489,26 @@ Required JSON structure:
         logger.info(
             f"Intake complete: complexity={state['complexity']}, "
             f"urgency={state['urgency']}, topic={state['primary_topic']}, "
-            f"confidence={state['intake_confidence']:.2f}"
+            f"confidence={state['intake_confidence']:.2f}, "
+            f"topic_shift={state['topic_shift']}, rewritten_query='{state['rewritten_query']}'"
         )
         
-        # Store valid classification in cache (TTL = 24 hours)
-        try:
-            redis_client = get_redis_client()
-            cache_data = {
-                "complexity": state["complexity"],
-                "urgency": state["urgency"],
-                "primary_topic": state["primary_topic"],
-                "error_codes": state["error_codes"],
-                "search_keywords": state["search_keywords"],
-                "confidence": state["intake_confidence"],
-            }
-            await redis_client.set_json(cache_key, cache_data, ttl_seconds=86400)
-            logger.info(f"[CACHE SET] Cached intake classification for query hash {content_hash}")
-        except Exception as e:
-            logger.warning(f"Failed to cache intake result: {e}")
+        # Store valid classification in cache (TTL = 24 hours) - only if not conversational
+        if not is_conversational:
+            try:
+                redis_client = get_redis_client()
+                cache_data = {
+                    "complexity": state["complexity"],
+                    "urgency": state["urgency"],
+                    "primary_topic": state["primary_topic"],
+                    "error_codes": state["error_codes"],
+                    "search_keywords": state["search_keywords"],
+                    "confidence": state["intake_confidence"],
+                }
+                await redis_client.set_json(cache_key, cache_data, ttl_seconds=86400)
+                logger.info(f"[CACHE SET] Cached intake classification for query hash {content_hash}")
+            except Exception as e:
+                logger.warning(f"Failed to cache intake result: {e}")
             
         return state
 
@@ -466,6 +516,7 @@ Required JSON structure:
         self,
         ticket_content: str,
         is_retry: bool,
+        chat_history: list[dict] | None = None,
     ) -> dict[str, Any] | None:
         """
         Call fast LLM (Grok) and parse JSON response.
@@ -473,12 +524,27 @@ Required JSON structure:
         Args:
             ticket_content: The ticket text to classify.
             is_retry: Whether this is a retry attempt.
+            chat_history: Optional list of previous chat history turns.
             
         Returns:
             Parsed JSON dict or None if parsing failed.
         """
-        prompt = self.RETRY_PROMPT if is_retry else self.INTAKE_PROMPT
-        formatted_prompt = prompt.format(ticket_content=ticket_content)
+        if is_retry:
+            prompt = self.RETRY_PROMPT
+            formatted_prompt = prompt.format(ticket_content=ticket_content)
+        elif chat_history:
+            prompt = self.CONVERSATIONAL_INTAKE_PROMPT
+            history_str = ""
+            for turn in chat_history:
+                role = "Customer" if turn.get("role") == "user" else "Agent"
+                history_str += f"{role}: {turn.get('content', '')}\n"
+            formatted_prompt = prompt.format(
+                history_formatted=history_str.strip(),
+                ticket_content=ticket_content
+            )
+        else:
+            prompt = self.INTAKE_PROMPT
+            formatted_prompt = prompt.format(ticket_content=ticket_content)
         
         try:
             response_text = await call_fast(formatted_prompt, max_tokens=256)
@@ -569,6 +635,8 @@ Required JSON structure:
         state["error_codes"] = []
         state["search_keywords"] = []
         state["intake_confidence"] = 0.5
+        state["topic_shift"] = False
+        state["rewritten_query"] = state.get("ticket_content", "")
         state["agent_path"] = ["intake"]
         
         # Log error

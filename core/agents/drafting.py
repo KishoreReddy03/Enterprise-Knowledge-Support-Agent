@@ -37,6 +37,7 @@ class DraftingAgent:
 TONE & STYLE:
 - Write like a real human support engineer writing an email, NOT like a documentation page
 - Open with a warm acknowledgment ("Thanks for reaching out!", "Great question!", "I can see what's happening here")
+- If this is a follow-up question (check the CONVERSATION HISTORY), do NOT repeat generic introductory greetings like "Thanks for reaching out!" or "Hi there!". Instead, directly address their follow-up (e.g., "Sure, let's look at that...", "I see what you mean, let's debug that code snippet...")
 - Be conversational and empathetic — the customer is frustrated and needs help
 - Explain the root cause in plain English (1-2 sentences, no jargon headers)
 - Provide the fix naturally — use code snippets inline when helpful
@@ -68,7 +69,7 @@ INTERNAL REP NOTE:
 
 OUTPUT FORMAT: Return valid JSON only. No markdown code blocks wrapping the JSON."""
 
-    USER_PROMPT_TEMPLATE = """SUPPORT TICKET:
+    USER_PROMPT_TEMPLATE = """{chat_history_block}SUPPORT TICKET:
 {ticket_content}
 
 CUSTOMER INFO:
@@ -302,7 +303,18 @@ Please make sure to address these quality issues as well in your revised draft."
         except Exception as e:
             logger.warning(f"Few-shot selection failed, continuing without: {e}")
 
+        # Format conversational history block if present
+        chat_history = state.get("chat_history", [])
+        chat_history_block = ""
+        if chat_history:
+            history_str = ""
+            for turn in chat_history:
+                role = "Customer" if turn.get("role") == "user" else "Agent"
+                history_str += f"{role}: {turn.get('content', '')}\n"
+            chat_history_block = f"CONVERSATION HISTORY:\n{history_str.strip()}\n\n"
+
         base_prompt = self.USER_PROMPT_TEMPLATE.format(
+            chat_history_block=chat_history_block,
             ticket_content=state.get("ticket_content", ""),
             customer_id=state.get("customer_id", "Unknown"),
             customer_tier=state.get("customer_tier", "standard"),

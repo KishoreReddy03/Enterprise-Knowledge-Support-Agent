@@ -152,6 +152,12 @@ class RetrievalAgent:
         Combines extracted search_keywords with error codes and topic keywords
         for highly relevant retrieval.
         """
+        rewritten = state.get("rewritten_query", "")
+        # If there's a rewritten query and we're in a multi-turn conversation and it's not a topic shift:
+        if rewritten and state.get("chat_history") and not state.get("topic_shift", False):
+            logger.info(f"[RETRIEVAL QUERY] Using rephrased query: '{rewritten}'")
+            return rewritten
+
         parts: list[str] = []
         
         # Prepend error codes if present

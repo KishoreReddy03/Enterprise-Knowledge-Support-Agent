@@ -225,6 +225,39 @@ class RedisClient:
         result = await self.get(f"circuit:{service}:failures")
         return int(result) if result else 0
 
+    # ─── Conversational Session Memory ───────────────────────────────────────
+
+    async def save_session_history(
+        self, session_id: str, history: list[dict], ttl_seconds: int = 86400
+    ) -> bool:
+        """
+        Save conversational session history.
+        
+        Args:
+            session_id: Session identifier.
+            history: List of dialog turns (dicts with 'role' and 'content').
+            ttl_seconds: Cache expiry (default 24 hours).
+            
+        Returns:
+            True if saved successfully.
+        """
+        key = f"session:{session_id}:history"
+        return await self.set_json(key, history, ttl_seconds)
+
+    async def get_session_history(self, session_id: str) -> list[dict]:
+        """
+        Retrieve conversational session history.
+        
+        Args:
+            session_id: Session identifier.
+            
+        Returns:
+            List of dialog turns.
+        """
+        key = f"session:{session_id}:history"
+        result = await self.get_json(key)
+        return result if isinstance(result, list) else []
+
 
 # Module-level singleton
 _client: RedisClient | None = None

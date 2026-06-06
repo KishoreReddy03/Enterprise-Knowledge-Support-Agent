@@ -196,6 +196,12 @@ class TicketState(TypedDict, total=False):
     intake_confidence: float
     """Confidence score (0-1) in the classification."""
     
+    topic_shift: bool
+    """Whether the query shifts to a new topic unrelated to the chat history."""
+    
+    rewritten_query: str
+    """The rephrased standalone query for retrieval."""
+    
     # ─── RETRIEVAL AGENT OUTPUT ──────────────────────────────────────────────────
     # Produced by the retrieval agent
     
@@ -335,6 +341,9 @@ class TicketState(TypedDict, total=False):
     rather than actual LLM evaluation.
     Uses operator.add for accumulation across nodes.
     """
+    
+    chat_history: list[dict]
+    """Previous chat history turns in this session."""
 
 
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -347,6 +356,7 @@ def create_initial_state(
     customer_id: str,
     customer_tier: CustomerTier = "standard",
     session_id: str | None = None,
+    chat_history: list[dict] | None = None,
 ) -> TicketState:
     """
     Create a new TicketState with required input fields and defaults.
@@ -357,6 +367,7 @@ def create_initial_state(
         customer_id: Customer identifier.
         customer_tier: Customer tier level.
         session_id: Optional session ID (generated if not provided).
+        chat_history: Optional list of previous chat history turns.
         
     Returns:
         Initialized TicketState ready for pipeline processing.
@@ -377,6 +388,8 @@ def create_initial_state(
         primary_topic="other",
         error_codes=[],
         intake_confidence=0.0,
+        topic_shift=False,
+        rewritten_query="",
         
         # Retrieval defaults
         docs_results=[],
@@ -423,6 +436,7 @@ def create_initial_state(
         error_log=[],
         llm_routing_decision="",
         llm_parse_failures=[],
+        chat_history=chat_history or [],
     )
 
 

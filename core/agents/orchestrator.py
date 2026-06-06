@@ -305,27 +305,31 @@ async def process_ticket(
     customer_id: str = "unknown",
     customer_tier: str = "standard",
     ticket_id: str | None = None,
+    session_id: str | None = None,
 ) -> dict[str, Any]:
     """
     Process a support ticket through the complete agent pipeline.
     
     This is the main entry point for the system. It:
     1. Runs input guardrails (injection, PII, rate limiting)
-    2. Checks semantic cache for duplicate queries
-    3. Checks circuit breaker for Groq availability
-    4. Creates initial state and runs LangGraph pipeline
-    5. Runs output guardrails (hallucination, topic, PII leak)
-    6. Caches the response for future duplicate queries
-    7. Returns the final response
+    2. Checks session memory history (if session_id is active)
+    3. Checks semantic cache for duplicate queries (stateless only)
+    4. Checks circuit breaker for Groq availability
+    5. Creates initial state with history context and runs LangGraph pipeline
+    6. Runs output guardrails (hallucination, topic, PII leak)
+    7. Saves new turns to conversational memory (if successful)
+    8. Caches the response for future duplicate queries (stateless only)
+    9. Returns the final response
     
     Args:
         ticket_content: The customer's support message.
         customer_id: Customer identifier.
         customer_tier: Customer tier (free, standard, enterprise).
         ticket_id: Optional ticket ID (generated if not provided).
+        session_id: Optional conversational session ID.
         
     Returns:
-        Dictionary with final_response, agent_path, guardrail_warnings, etc.
+        Dictionary with final_response, session_id, agent_path, guardrail_warnings, etc.
         
     Raises:
         Never raises - all errors are captured in the response.
@@ -333,6 +337,7 @@ async def process_ticket(
     start_time = datetime.utcnow()
     guardrail_warnings: list[str] = []
     generated_ticket_id = ticket_id or str(uuid4())
+    active_session_id = session_id or generated_ticket_id
     
     # ─── STEP 1: Input Guardrails ────────────────────────────────────────────
     input_guard = get_input_guard()
@@ -348,17 +353,29 @@ async def process_ticket(
             f"{guard_result.warnings}"
         )
     
-    # ─── STEP 2: Semantic Cache Check ────────────────────────────────────────
+    # Load conversational history from Redis if session is active
     redis = get_redis_client()
-    cached = await redis.get_cached_response(guard_result.query_hash)
-    if cached:
-        logger.info(
-            f"Cache HIT for query hash {guard_result.query_hash} — "
-            f"skipping pipeline"
-        )
-        cached["cache_hit"] = True
-        cached["guardrail_warnings"] = guardrail_warnings
-        return cached
+    chat_history = []
+    if session_id:
+        try:
+            chat_history = await redis.get_session_history(session_id)
+            logger.info(f"[SESSION MEMORY] Loaded history for session {session_id} (turns: {len(chat_history)})")
+        except Exception as e:
+            logger.warning(f"Failed to load session history from Redis: {e}")
+            
+    # ─── STEP 2: Semantic Cache Check ────────────────────────────────────────
+    # Only check semantic cache for stateless queries to avoid context collision
+    if not session_id:
+        cached = await redis.get_cached_response(guard_result.query_hash)
+        if cached:
+            logger.info(
+                f"Cache HIT for query hash {guard_result.query_hash} — "
+                f"skipping pipeline"
+            )
+            cached["cache_hit"] = True
+            cached["guardrail_warnings"] = guardrail_warnings
+            cached["session_id"] = active_session_id
+            return cached
     
     # ─── STEP 3: Circuit Breaker Check ───────────────────────────────────────
     circuit_breaker = get_circuit_breaker()
@@ -366,6 +383,7 @@ async def process_ticket(
         logger.warning("Circuit breaker OPEN — returning fallback response")
         fallback = circuit_breaker.get_fallback_response()
         fallback["ticket_id"] = generated_ticket_id
+        fallback["session_id"] = active_session_id
         fallback["guardrail_warnings"] = guardrail_warnings
         return fallback
     
@@ -375,10 +393,12 @@ async def process_ticket(
         ticket_content=sanitized_content,
         customer_id=customer_id,
         customer_tier=customer_tier,  # type: ignore
+        session_id=active_session_id,
+        chat_history=chat_history,
     )
     
     logger.info(
-        f"Processing ticket {initial_state['ticket_id']}: "
+        f"Processing ticket {initial_state['ticket_id']} | session={active_session_id}: "
         f"tier={customer_tier}, content_length={len(sanitized_content)}"
     )
     
@@ -443,6 +463,19 @@ async def process_ticket(
                     final_response["review_reason"] = f"{existing_reason} | {new_reason}"
                 else:
                     final_response["review_reason"] = new_reason
+
+            # Update chat history in Redis with user query and approved response
+            reply_text = final_response.get("reply_text", "")
+            if reply_text:
+                chat_history.append({"role": "user", "content": sanitized_content})
+                chat_history.append({"role": "assistant", "content": reply_text})
+                # Limit history to 20 messages (10 turns)
+                chat_history = chat_history[-20:]
+                try:
+                    await redis.save_session_history(active_session_id, chat_history)
+                    logger.info(f"[SESSION MEMORY] Saved history for session {active_session_id} (turns: {len(chat_history)//2})")
+                except Exception as e:
+                    logger.warning(f"Failed to save session history to Redis: {e}")
         
         # Force escalation if input guardrails flagged it
         if guard_result.should_escalate:
@@ -454,6 +487,7 @@ async def process_ticket(
         # ─── STEP 6: Build Response ──────────────────────────────────────────
         response = {
             "ticket_id": final_state.get("ticket_id"),
+            "session_id": active_session_id,
             "final_response": final_state.get("final_response"),
             "agent_path": final_state.get("agent_path", []),
             "total_tokens": final_state.get("total_tokens", 0),
@@ -469,7 +503,8 @@ async def process_ticket(
         }
         
         # ─── STEP 7: Cache Response ──────────────────────────────────────────
-        if not response["escalated"] and response["confidence_score"] >= 0.6:
+        # Only cache stateless sessions to avoid wrong history collisions
+        if not session_id and not response["escalated"] and response["confidence_score"] >= 0.6:
             await redis.cache_response(
                 query_hash=guard_result.query_hash,
                 response_data=response,
@@ -478,7 +513,7 @@ async def process_ticket(
             logger.info(f"Response cached for hash {guard_result.query_hash}")
         
         logger.info(
-            f"Ticket {response['ticket_id']} processed: "
+            f"Ticket {response['ticket_id']} processed | session={active_session_id}: "
             f"path={response['agent_path']}, "
             f"tokens={response['total_tokens']}, "
             f"time={processing_time_ms}ms, "
@@ -501,6 +536,7 @@ async def process_ticket(
         # Return error response
         return {
             "ticket_id": generated_ticket_id,
+            "session_id": active_session_id,
             "final_response": FinalResponse(
                 reply_text="",
                 confidence=0.0,
@@ -508,8 +544,8 @@ async def process_ticket(
                 needs_review=True,
                 review_reason=f"Pipeline error: {str(e)}",
             ),
-            "agent_path": initial_state.get("agent_path", []),
-            "total_tokens": initial_state.get("total_tokens", 0),
+            "agent_path": initial_state.get("agent_path", []) if 'initial_state' in locals() else [],
+            "total_tokens": initial_state.get("total_tokens", 0) if 'initial_state' in locals() else 0,
             "escalated": True,
             "escalation_brief": f"Pipeline failed with error: {str(e)}",
             "processing_time_ms": processing_time_ms,
@@ -524,6 +560,7 @@ async def process_ticket_debug(
     ticket_content: str,
     customer_id: str = "unknown",
     customer_tier: str = "standard",
+    session_id: str | None = None,
 ) -> TicketState:
     """
     Process a ticket and return the full final state (for debugging).
@@ -535,15 +572,26 @@ async def process_ticket_debug(
         ticket_content: The customer's support message.
         customer_id: Customer identifier.
         customer_tier: Customer tier.
+        session_id: Optional session ID.
         
     Returns:
         Complete final TicketState.
     """
+    redis = get_redis_client()
+    chat_history = []
+    if session_id:
+        try:
+            chat_history = await redis.get_session_history(session_id)
+        except Exception:
+            pass
+
     initial_state = create_initial_state(
         ticket_id=str(uuid4()),
         ticket_content=ticket_content,
         customer_id=customer_id,
         customer_tier=customer_tier,  # type: ignore
+        session_id=session_id,
+        chat_history=chat_history,
     )
     
     graph = get_graph()

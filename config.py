@@ -137,9 +137,6 @@ class Settings(BaseSettings):
         default=0.2,
         description="Minimum similarity score for retrieved documents (TEMPORARILY LOWERED FOR DEBUG)",
     )
-    MAX_AGENT_RETRIES: int = Field(
-        default=2,
-        description="Maximum retry attempts for agent operations",
     )
     
     # Optional API keys

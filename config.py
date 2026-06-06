@@ -159,22 +159,7 @@ class Settings(BaseSettings):
         "GITHUB_TOKEN",
     }
 
-    def display_config(self) -> None:
-        """
-        Display all configuration values with sensitive fields masked.
-        
-        Logs each configuration key-value pair, replacing sensitive values with '***'.
-        """
-        logger.info("=== Stripe Support Agent Configuration ===")
-        for field_name in self.model_fields:
-            value = getattr(self, field_name)
-            if field_name in self._SENSITIVE_FIELDS:
-                display_value = "***"
-            else:
-                display_value = value
-            logger.info(f"{field_name}: {display_value}")
-        logger.info("=== End Configuration ===")
-
+    
 
 def get_settings() -> Settings:
     """

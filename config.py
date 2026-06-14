@@ -177,28 +177,6 @@ class Settings(BaseSettings):
 
 
 def get_settings() -> Settings:
-    """
-    Load and validate settings from environment.
-    
-    Returns:
-        Settings: Validated settings instance.
-        
-    Raises:
-        SystemExit: If required environment variables are missing.
-    """
-    try:
-        return Settings()
-    except ValidationError as e:
-        logger.error("Configuration validation failed!")
-        for error in e.errors():
-            field = error["loc"][0] if error["loc"] else "unknown"
-            msg = error["msg"]
-            logger.error(f"  Missing or invalid: {field} - {msg}")
-        logger.error(
-            "Please check your .env file and ensure all required variables are set. "
-            "See .env.example for reference."
-        )
-        sys.exit(1)
 
 
 # Global settings instance - imported by other modules

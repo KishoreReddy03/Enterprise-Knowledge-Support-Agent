@@ -120,7 +120,17 @@ class Settings(BaseSettings):
         description="Timeout for Gemini fallback calls in seconds",
     )
     
-
+    # Thresholds
+    CONFIDENCE_HIGH_THRESHOLD: float = Field(
+        default=0.90,
+        description="Threshold for high confidence responses (auto-send eligible)",
+    )
+    CONFIDENCE_MEDIUM_THRESHOLD: float = Field(
+        default=0.75,
+        description="Threshold for medium confidence responses (review recommended)",
+    )
+    CONFIDENCE_LOW_THRESHOLD: float = Field(
+        default=0.60,
         description="Threshold for low confidence responses (escalation likely)",
     )
     RETRIEVAL_SIMILARITY_THRESHOLD: float = Field(
